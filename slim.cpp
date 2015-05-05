@@ -35,13 +35,17 @@ using namespace std;
 
 const gsl_rng* rng;
 
+/**
+ * \class mutation
+ */
+
 class mutation {
  public:
-  int t;    // mutation type identifier
-  int x;    // position
-  float s;  // selection coefficient
-  int i;    // subpopulation in which mutation arose
-  int g;    // generation in which mutation arose
+  int t;    /**< mutation type identifier */
+  int x;    /**< position */
+  float s;  /**< selection coefficient */
+  int i;    /**< subpopulation in which mutation arose */
+  int g;    /**< generation in which mutation arose */
 
   mutation(void) { ; }
 
@@ -63,25 +67,35 @@ bool operator==(const mutation& M1, const mutation& M2) {
 };
 
 class event {
-  // type of events:
-  //
-  // t P i n [j]:  add subpopulation i of size n [drawn from j]
-  // t N i n:      set size of subpopulation i to n
-  // t M i j x:    set fraction x of subpopulation i that originates as migrants
-  // from j
-  // t S i s;      set selfing fraction of subpopulation i to s
-  //
-  // t R i n:      output sample of n randomly drawn genomes from subpopulation
-  // i
-  // t F:          output list of all mutations that have become fixed so far
-  // t A [file]:   output state of entire population [into file]
-  // t T m:        follow trajectory of mutation m (specified by mutation type)
-  // from generation t on
-
+  /** \class event
+  * type of events:
+  *
+  * t P i n [j]:  add subpopulation i of size n [drawn from j]
+  *
+  * t N i n:      set size of subpopulation i to n
+  *
+  * t M i j x:    set fraction x of subpopulation i that originates as migrants
+  *
+  * from j
+  *
+  * t S i s;      set selfing fraction of subpopulation i to s
+  *
+  * t R i n:      output sample of n randomly drawn genomes from subpopulation
+  *
+  * i
+  *
+  * t F:          output list of all mutations that have become fixed so far
+  *
+  * t A [file]:   output state of entire population [into file]
+  *
+  * t T m:        follow trajectory of mutation m (specified by mutation type)
+  *
+  * from generation t on
+  */
  public:
-  char t;            // event type
-  vector<string> s;  // vector of strings with parameters of event
-  int np;            // number of parameters
+  char t;            /**< event type */
+  vector<string> s;  /**< vector of strings with parameters of event */
+  int np;            /**< number of parameters */
 
   event(char T, vector<string> S) {
     t = T;
@@ -101,18 +115,19 @@ class event {
 };
 
 class mutation_type {
-  // a mutation type is specified by the DFE and the dominance coefficient
-  //
-  // DFE options: f: fixed (s)
-  //              e: exponential (mean s)
-  //              g: gamma distribution (mean s,shape)
-  //
-  // examples: synonymous, nonsynonymous, adaptive, etc.
-
+  /** \class mutation_type
+  * a mutation type is specified by the DFE and the dominance coefficient
+  *
+  * DFE options: f: fixed (s)
+  *              e: exponential (mean s)
+  *              g: gamma distribution (mean s,shape)
+  *
+  * examples: synonymous, nonsynonymous, adaptive, etc.
+  */
  public:
-  float h;           // dominance coefficient
-  char d;            // DFE (f: fixed, g: gamma, e: exponential)
-  vector<double> p;  // DFE parameters
+  float h;           /**< dominance coefficient */
+  char d;            /**< DFE (f: fixed, g: gamma, e: exponential) */
+  vector<double> p;  /**< DFE parameters */
 
   mutation_type(float H, char D, vector<double> P) {
     h = H;
@@ -146,11 +161,14 @@ class mutation_type {
 };
 
 class genomic_element {
-  // a genomic element has a genomic element type identifier (i), start (s) and
-  // end (e) position
-
+ /** \class genomic_element
+  * a genomic element has a genomic element type identifier (i), start (s) and
+  * end (e) position
+  */
  public:
-  int i, s, e;
+  int i; /**< identifier */
+  int s; /**< start */
+  int e; /**< end*/
 
   genomic_element(int I, int S, int E) {
     i = I;
@@ -160,18 +178,19 @@ class genomic_element {
 };
 
 class genomic_element_type {
-  // a genomic element type is specified by a vector of the mutation type
-  // identifiers off all
-  // mutation types than can occur in such elements and a vector of their
-  // relative fractions.
-  // examples: exon, intron, utr, intergenic, etc.
-
+  /** \class genomic_element_tpe
+  * a genomic element type is specified by a vector of the mutation type
+  * identifiers off all
+  * mutation types than can occur in such elements and a vector of their
+  * relative fractions.
+  * examples: exon, intron, utr, intergenic, etc.
+  */
  private:
   gsl_ran_discrete_t* LT;
 
  public:
-  vector<int> m;     // mutation types identifiers in this element
-  vector<double> g;  // relative fractions of each mutation type
+  vector<int> m;     /**< mutation types identifiers in this element */
+  vector<double> g;  /**< relative fractions of each mutation type */
 
   genomic_element_type(vector<int> M, vector<double> G) {
     m = M;
@@ -191,8 +210,9 @@ class genomic_element_type {
 };
 
 class chromosome : public vector<genomic_element> {
-  // the chromosome is a vector of genomic elements (type, start, end)
-
+  /** \class chromosome
+   * the chromosome is a vector of genomic elements (type, start, end)
+   */
  private:
   gsl_ran_discrete_t* LT_M;  // mutation
   gsl_ran_discrete_t* LT_R;  // recombination
@@ -203,11 +223,11 @@ class chromosome : public vector<genomic_element> {
   vector<int> rec_x;
   vector<double> rec_r;
 
-  int L;       // length of chromosome
-  double M;    // overall mutation rate
-  double R;    // overall recombination rate
-  double G_f;  // gene conversion fraction
-  double G_l;  // average stretch length
+  int L;       /**< length of chromosome */
+  double M;    /**< overall mutation rate */
+  double R;    /**< overall recombination rate */
+  double G_f;  /**< gene conversion fraction */
+  double G_l;  /**< average stretch length */
 
   chromosome() {
     L = 0;
@@ -330,13 +350,16 @@ class chromosome : public vector<genomic_element> {
 };
 
 class polymorphism {
+	/**
+	 * \class polymorphism
+	 */
  public:
-  int id;   // mutation id
-  int t;    // mutation type
-  float s;  // selection coefficient
-  int i;    // subpopulation in which mutation arose
-  int g;    // generation in which mutation arose
-  int n;    // prevalence
+  int id;   /**< mutation id */
+  int t;    /**< mutation type */
+  float s;  /**< selection coefficient */
+  int i;    /**< subpopulation in which mutation arose */
+  int g;    /**< generation in which mutation arose  */
+  int n;    /**< prevalence */
 
   polymorphism(int ID, int T, float S, int I, int G, int N) {
     id = ID;
@@ -367,13 +390,16 @@ class polymorphism {
 };
 
 class substitution {
+	/**
+	 * \class substitution
+	 */
  public:
-  int t;    // mutation type
-  int x;    // position
-  float s;  // selection coefficient
-  int i;    // subpopulation in which mutation arose
-  int g;    // generation in which mutation arose
-  int f;    // fixation time
+  int t;    /**< mutation type */
+  int x;    /**< position */
+  float s;  /**< selection coefficient */
+  int i;    /**< subpopulation in which mutation arose */
+  int g;    /**< generation in which mutation arose */
+  int f;    /**< fixation time */
 
   substitution(mutation M, int F) {
     t = M.t;
@@ -392,11 +418,14 @@ class substitution {
 };
 
 class introduced_mutation : public mutation {
+	/**
+	 * \class introduced_mutation
+	 */
  public:
-  int i;    // subpopulation into which mutation is introduced
-  int g;    // generation in which mutation is introduced
-  int nAA;  // number of homozygotes
-  int nAa;  // number of heterozygotes
+  int i;    /**< subpopulation into which mutation is introduced */
+  int g;    /**< generation in which mutation is introduced */
+  int nAA;  /**< number of homozygotes */
+  int nAa;  /**< number of heterozygotes */
 
   introduced_mutation(int T, int X, int I, int G, int NAA, int NAa) {
     t = T;
@@ -535,15 +564,18 @@ genome polymorphic(genome& G1, genome& G2) {
 }
 
 class subpopulation {
-  // a subpopulation is described by the vector G of 2N genomes
-  // individual i is constituted by the two genomes 2*i and 2*i+1
+  /**
+   * \class subpopulation
+   *  a subpopulation is described by the vector G of 2N genomes
+   *  individual i is constituted by the two genomes 2*i and 2*i+1
+   */
 
  private:
   gsl_ran_discrete_t* LT;
 
  public:
-  int N;     // population size
-  double S;  // selfing fraction
+  int N;     /**< population size */
+  double S;  /**< selfing fraction */
 
   vector<genome> G_parent;
   vector<genome> G_child;
@@ -674,11 +706,14 @@ class subpopulation {
 };
 
 class population : public map<int, subpopulation> {
-  // the population is a map of subpopulations
+  /**
+   * \class population
+   * the population is a map of subpopulations
+   */
+
 
  public:
-  vector<substitution> Substitutions;
-
+  vector<substitution> Substitutions; /**< The population substitutions */
   map<int, subpopulation>::iterator it;
 
   vector<string> parameters;
