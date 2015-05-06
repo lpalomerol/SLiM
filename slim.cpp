@@ -1,23 +1,25 @@
-// SLiM: a forward population genetic simulation with selection and linkage
-//
-// version 1.8 (November 4, 2014)
-//
-// Copyright (C) 2013  Philipp Messer
-//
-// compile by:
-//
-// g++ -O3   ./slim.cpp -lgsl -lgslcblas -o slim
-//
-// This program is free software: you can redistribute it and/or modify
-// it under the terms of the GNU General Public License as published by
-// the Free Software Foundation, either version 3 of the License, or
-// (at your option) any later version (http://www.gnu.org/licenses/).
-//
-// This program is distributed in the hope that it will be useful,
-// but WITHOUT ANY WARRANTY; without even the implied warranty of
-// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-// GNU General Public License for more details.
-
+/**
+ * @file slim.cpp
+ *  SLiM: a forward population genetic simulation with selection and linkage
+ *
+ * version 1.8 (November 4, 2014)
+ *
+ * Copyright (C) 2013  Philipp Messer
+ *
+ * compile by:
+ *
+ * g++ -O3   ./slim.cpp -lgsl -lgslcblas -o slim
+ *
+ * This program is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License as published by
+ * the Free Software Foundation, either version 3 of the License, or
+ * (at your option) any later version (http://www.gnu.org/licenses/).
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU General Public License for more details.
+ */
 #include <iostream>
 #include <iomanip>
 #include <vector>
@@ -41,11 +43,11 @@ const gsl_rng* rng;
 
 class mutation {
  public:
-  int t;    /**< mutation type identifier */
-  int x;    /**< position */
-  float s;  /**< selection coefficient */
-  int i;    /**< subpopulation in which mutation arose */
-  int g;    /**< generation in which mutation arose */
+  int t;   /**< mutation type identifier */
+  int x;   /**< position */
+  float s; /**< selection coefficient */
+  int i;   /**< subpopulation in which mutation arose */
+  int g;   /**< generation in which mutation arose */
 
   mutation(void) { ; }
 
@@ -67,36 +69,36 @@ bool operator==(const mutation& M1, const mutation& M2) {
 };
 
 /** @class event
-* type of events:
-*
-* t P i n [j]:  add subpopulation i of size n [drawn from j]
-*
-* t N i n:      set size of subpopulation i to n
-*
-* t M i j x:    set fraction x of subpopulation i that originates as migrants
-*
-* from j
-*
-* t S i s;      set selfing fraction of subpopulation i to s
-*
-* t R i n:      output sample of n randomly drawn genomes from subpopulation
-*
-* i
-*
-* t F:          output list of all mutations that have become fixed so far
-*
-* t A [file]:   output state of entire population [into file]
-*
-* t T m:        follow trajectory of mutation m (specified by mutation type)
-*
-* from generation t on
-*/
+ * type of events:
+ *
+ * t P i n [j]:  add subpopulation i of size n [drawn from j]
+ *
+ * t N i n:      set size of subpopulation i to n
+ *
+ * t M i j x:    set fraction x of subpopulation i that originates as migrants
+ *
+ * from j
+ *
+ * t S i s;      set selfing fraction of subpopulation i to s
+ *
+ * t R i n:      output sample of n randomly drawn genomes from subpopulation
+ *
+ * i
+ *
+ * t F:          output list of all mutations that have become fixed so far
+ *
+ * t A [file]:   output state of entire population [into file]
+ *
+ * t T m:        follow trajectory of mutation m (specified by mutation type)
+ *
+ * from generation t on
+ */
 class event {
 
  public:
-  char t;            /**< event type */
-  vector<string> s;  /**< vector of strings with parameters of event */
-  int np;            /**< number of parameters */
+  char t;           /**< event type */
+  vector<string> s; /**< vector of strings with parameters of event */
+  int np;           /**< number of parameters */
 
   event(char T, vector<string> S) {
     t = T;
@@ -117,18 +119,18 @@ class event {
 
 class mutation_type {
   /** @class mutation_type
-  * a mutation type is specified by the DFE and the dominance coefficient
-  *
-  * DFE options: f: fixed (s)
-  *              e: exponential (mean s)
-  *              g: gamma distribution (mean s,shape)
-  *
-  * examples: synonymous, nonsynonymous, adaptive, etc.
-  */
+   * a mutation type is specified by the DFE and the dominance coefficient
+   *
+   * DFE options: f: fixed (s)
+   *              e: exponential (mean s)
+   *              g: gamma distribution (mean s,shape)
+   *
+   * examples: synonymous, nonsynonymous, adaptive, etc.
+   */
  public:
-  float h;           /**< dominance coefficient */
-  char d;            /**< DFE (f: fixed, g: gamma, e: exponential) */
-  vector<double> p;  /**< DFE parameters */
+  float h;          /**< dominance coefficient */
+  char d;           /**< DFE (f: fixed, g: gamma, e: exponential) */
+  vector<double> p; /**< DFE parameters */
 
   /**
    * @brief constructor
@@ -152,10 +154,10 @@ class mutation_type {
       exit(1);
     }
   }
- /**
-  * @brief Returns extra parameter value of this mutaiton type
-  * @return float
-  */
+  /**
+   * @brief Returns extra parameter value of this mutaiton type
+   * @return float
+   */
   float draw_s() {
     switch (d) {
       case 'f':
@@ -171,9 +173,9 @@ class mutation_type {
 };
 
 /** @class genomic_element
-  * a genomic element has a genomic element type identifier (i), start (s) and
-  * end (e) position
-  */
+ * a genomic element has a genomic element type identifier (i), start (s) and
+ * end (e) position
+ */
 class genomic_element {
 
  public:
@@ -196,18 +198,18 @@ class genomic_element {
 
 class genomic_element_type {
   /** @class genomic_element_tpe
-  * a genomic element type is specified by a vector of the mutation type
-  * identifiers off all
-  * mutation types than can occur in such elements and a vector of their
-  * relative fractions.
-  * examples: exon, intron, utr, intergenic, etc.
-  */
+   * a genomic element type is specified by a vector of the mutation type
+   * identifiers off all
+   * mutation types than can occur in such elements and a vector of their
+   * relative fractions.
+   * examples: exon, intron, utr, intergenic, etc.
+   */
  private:
   gsl_ran_discrete_t* LT;
 
  public:
-  vector<int> m;     /**< mutation types identifiers in this element */
-  vector<double> g;  /**< relative fractions of each mutation type */
+  vector<int> m;    /**< mutation types identifiers in this element */
+  vector<double> g; /**< relative fractions of each mutation type */
 
   genomic_element_type(vector<int> M, vector<double> G) {
     m = M;
@@ -240,11 +242,11 @@ class chromosome : public vector<genomic_element> {
   vector<int> rec_x;
   vector<double> rec_r;
 
-  int L;       /**< length of chromosome */
-  double M;    /**< overall mutation rate */
-  double R;    /**< overall recombination rate */
-  double G_f;  /**< gene conversion fraction */
-  double G_l;  /**< average stretch length */
+  int L;      /**< length of chromosome */
+  double M;   /**< overall mutation rate */
+  double R;   /**< overall recombination rate */
+  double G_f; /**< gene conversion fraction */
+  double G_l; /**< average stretch length */
 
   chromosome() {
     L = 0;
@@ -367,16 +369,16 @@ class chromosome : public vector<genomic_element> {
 };
 
 class polymorphism {
-	/**
-	 * @class polymorphism
-	 */
+  /**
+   * @class polymorphism
+   */
  public:
-  int id;   /**< mutation id */
-  int t;    /**< mutation type */
-  float s;  /**< selection coefficient */
-  int i;    /**< subpopulation in which mutation arose */
-  int g;    /**< generation in which mutation arose  */
-  int n;    /**< prevalence */
+  int id;  /**< mutation id */
+  int t;   /**< mutation type */
+  float s; /**< selection coefficient */
+  int i;   /**< subpopulation in which mutation arose */
+  int g;   /**< generation in which mutation arose  */
+  int n;   /**< prevalence */
 
   polymorphism(int ID, int T, float S, int I, int G, int N) {
     id = ID;
@@ -407,16 +409,16 @@ class polymorphism {
 };
 
 class substitution {
-	/**
-	 * @class substitution
-	 */
+  /**
+   * @class substitution
+   */
  public:
-  int t;    /**< mutation type */
-  int x;    /**< position */
-  float s;  /**< selection coefficient */
-  int i;    /**< subpopulation in which mutation arose */
-  int g;    /**< generation in which mutation arose */
-  int f;    /**< fixation time */
+  int t;   /**< mutation type */
+  int x;   /**< position */
+  float s; /**< selection coefficient */
+  int i;   /**< subpopulation in which mutation arose */
+  int g;   /**< generation in which mutation arose */
+  int f;   /**< fixation time */
 
   substitution(mutation M, int F) {
     t = M.t;
@@ -440,10 +442,10 @@ class substitution {
 class introduced_mutation : public mutation {
 
  public:
-  int i;    /**< subpopulation into which mutation is introduced */
-  int g;    /**< generation in which mutation is introduced */
-  int nAA;  /**< number of homozygotes */
-  int nAa;  /**< number of heterozygotes */
+  int i;   /**< subpopulation into which mutation is introduced */
+  int g;   /**< generation in which mutation is introduced */
+  int nAA; /**< number of homozygotes */
+  int nAa; /**< number of heterozygotes */
 
   introduced_mutation(int T, int X, int I, int G, int NAA, int NAa) {
     t = T;
@@ -475,7 +477,8 @@ class partial_sweep {
 class genome : public vector<mutation> {};
 
 /**
- * @brief return genome G consisting only of the mutations that are present in both G1 and G2
+ * @brief return genome G consisting only of the mutations that are present in
+ * both G1 and G2
  * @param G1 First genome to intersect
  * @param G2 Second genome to intersect
  * @return genome Intersected genome
@@ -527,7 +530,8 @@ genome fixed(genome& G1, genome& G2) {
 }
 
 /**
- * @brief return genome G consisting only of the mutations in G1 that are not in G2
+ * @brief return genome G consisting only of the mutations in G1 that are not in
+ * G2
  * @param G1 genome source 1 (minuendo)
  * @param G2 genome to check (sustraendo)
  * @return genome The substracted genome
@@ -606,14 +610,14 @@ class subpopulation {
   gsl_ran_discrete_t* LT;
 
  public:
-  int N;     /**< population size */
-  double S;  /**< selfing fraction */
+  int N;    /**< population size */
+  double S; /**< selfing fraction */
 
   vector<genome> G_parent;
   vector<genome> G_child;
 
   map<int, double> m;  // m[i]: fraction made up of migrants from subpopulation
-                       // i per generation
+  // i per generation
 
   subpopulation(int n) {
     N = n;
@@ -645,7 +649,8 @@ class subpopulation {
   }
 
   /**
-   * @brief calculate the fitness of the individual constituted by genomes i and j in the parent population
+   * @brief calculate the fitness of the individual constituted by genomes i and
+   * j in the parent population
    * @param i First genome id to compute
    * @param j Second genome id to compute
    * @param chr chromosome to check
@@ -752,7 +757,6 @@ class population : public map<int, subpopulation> {
    * the population is a map of subpopulations
    */
 
-
  public:
   vector<substitution> Substitutions; /**< The population substitutions */
   map<int, subpopulation>::iterator it;
@@ -782,7 +786,8 @@ class population : public map<int, subpopulation> {
   }
 
   /**
-   * @brief   add new subpopulation i of size N individuals drawn from source population j
+   * @brief   add new subpopulation i of size N individuals drawn from source
+   * population j
    * @param i New population id
    * @param j Populaition source
    * @param N Individuals drawn
@@ -818,14 +823,13 @@ class population : public map<int, subpopulation> {
       find(i)->second.G_parent[2 * p + 1] = find(j)->second.G_parent[2 * m + 1];
     }
   }
-/**
- * @Brief set size of subpopulation i to N
- * @param i Population identifier
- * @param N New size of this population, if is 0, removes it.
- * @return void
- */
+  /**
+   * @Brief set size of subpopulation i to N
+   * @param i Population identifier
+   * @param N New size of this population, if is 0, removes it.
+   * @return void
+   */
   void set_size(int i, unsigned int N) {
-
 
     if (count(i) == 0) {
       cerr << "ERROR (change size): no subpopulation p" << i << endl;
@@ -865,7 +869,8 @@ class population : public map<int, subpopulation> {
   }
 
   /**
-   * @brief  set fraction m of i that originates as migrants from j per generation
+   * @brief  set fraction m of i that originates as migrants from j per
+   * generation
    * @param i Destination Population Id
    * @param j Source population Id
    * @param m Fraction of migrants per generation, between 0 and 1
@@ -1025,12 +1030,12 @@ class population : public map<int, subpopulation> {
       FM.push_back(atoi(sub.c_str()));
     }
   }
-/**
- * @brief introduce user-defined mutation
- * @param M introduced mutation object (a new mutation)
- * @param chr Chromosome host of the mutation
- * @return void
- */
+  /**
+   * @brief introduce user-defined mutation
+   * @param M introduced mutation object (a new mutation)
+   * @param chr Chromosome host of the mutation
+   * @return void
+   */
   void introduce_mutation(introduced_mutation M, chromosome& chr) {
 
     if (count(M.i) == 0) {
@@ -1081,7 +1086,8 @@ class population : public map<int, subpopulation> {
   }
 
   /**
-   * @brief output trajectories of followed mutations and set s=0 for partial sweeps
+   * @brief output trajectories of followed mutations and set s=0 for partial
+   * sweeps
    * @param g Generation id
    * @param TM Mutations to track
    * @param PS partial_sweep to track
@@ -1182,13 +1188,13 @@ class population : public map<int, subpopulation> {
       }
     }
   }
-/**
- * @brief Evolves subpopulation a new generation
- * @param i Subpopulation id
- * @param chr Chromosome related
- * @param g Generation number
- * @return void
- */
+  /**
+   * @brief Evolves subpopulation a new generation
+   * @param i Subpopulation id
+   * @param chr Chromosome related
+   * @param g Generation number
+   * @return void
+   */
   void evolve_subpopulation(int i, chromosome& chr, int g) {
     int g1, g2, p1, p2, n_mut_1, n_mut_2;
 
@@ -1201,7 +1207,7 @@ class population : public map<int, subpopulation> {
     gsl_ran_shuffle(rng, child_map, find(i)->second.N, sizeof(int));
 
     int child_count = 0;  // counter over all N children (will get mapped to
-                          // child_map[child_count])
+    // child_map[child_count])
 
     // draw number of migrant individuals
 
@@ -1311,7 +1317,7 @@ class population : public map<int, subpopulation> {
    * p1 and p2 are swapped in half of the cases to assure random assortement
    */
   void crossover_mutation(int i, int c, int j, int P1, int P2, chromosome& chr,
-		  int g) {
+                          int g) {
 
     if (gsl_rng_uniform_int(rng, 2) == 0) {
       int swap = P1;
@@ -1412,7 +1418,8 @@ class population : public map<int, subpopulation> {
   }
 
   /**
-   * @brief find and remove fixed mutations from the children in all subpopulations
+   * @brief find and remove fixed mutations from the children in all
+   * subpopulations
    * @param g Generation id
    * @param chr chromosome
    */
@@ -1427,7 +1434,8 @@ class population : public map<int, subpopulation> {
     }
   }
   /**
-   * @brief find mutations that are fixed in all child subpopulations and return vector with their ids
+   * @brief find mutations that are fixed in all child subpopulations and return
+   * vector with their ids
    *        (possibly the doc may be wrong)
    * @param int g generation number
    * return void
@@ -1722,12 +1730,12 @@ class population : public map<int, subpopulation> {
 
     return id;
   }
- /**
-  * @brief if mutation is present in P increase prevalence, otherwise add it
-  * @param P Population
-  * @param m Mutation object
-  * @return void
-  */
+  /**
+   * @brief if mutation is present in P increase prevalence, otherwise add it
+   * @param P Population
+   * @param m Mutation object
+   * @return void
+   */
   void add_mut(multimap<int, polymorphism>& P, mutation m) {
 
     int id = 0;
