@@ -8,7 +8,7 @@
  *
  * compile by:
  *
- * g++ -O3   ./slim.cpp -lgsl -lgslcblas -o slim
+ * g++ -O3 -I./include/  ./slim.cpp ./src/*.cpp -lgsl -lgslcblas -o slim
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -32,6 +32,8 @@
 #include <string>
 #include <sstream>
 #include <unistd.h>
+
+#include "./include/translator.h"
 
 using namespace std;
 
@@ -198,6 +200,7 @@ class genomic_element {
 
 class genomic_element_type {
   /** @class genomic_element_tpe
+   * TODO: Add different populations for the genomes
    * a genomic element type is specified by a vector of the mutation type
    * identifiers off all
    * mutation types than can occur in such elements and a vector of their
@@ -208,6 +211,7 @@ class genomic_element_type {
   gsl_ran_discrete_t* LT;
 
  public:
+  //TODO: Add population id here... or ALL?
   vector<int> m;    /**< mutation types identifiers in this element */
   vector<double> g; /**< relative fractions of each mutation type */
 
@@ -225,7 +229,9 @@ class genomic_element_type {
     LT = gsl_ran_discrete_preproc(G.size(), A);
   }
 
-  int draw_mutation_type() { return m[gsl_ran_discrete(rng, LT)]; }
+  int draw_mutation_type() {
+	  return m[gsl_ran_discrete(rng, LT)];
+  }
 };
 
 class chromosome : public vector<genomic_element> {
@@ -2752,32 +2758,17 @@ void initialize(population& P, char* file, chromosome& chr, int& t_start,
         while (line.find('#') == string::npos && !infile.eof()) {
           if (line.length() > 0) {
             parameters.push_back(line);
+            genomicElementTypesLine genomic_line;
+            genomic_line = translate_genomic_elements_type_line(line);
 
-            // FORMAT: i m1 g1 [m2 g2 ...] (identifier, mut type class,
-            // fraction)
-
-            int i;
-            vector<int> m;
-            vector<double> g;
-            istringstream iss(line);
-            iss >> sub;
-            sub.erase(0, 1);
-            i = atoi(sub.c_str());
-            while (iss >> sub) {
-              sub.erase(0, 1);
-              m.push_back(atoi(sub.c_str()));
-              iss >> sub;
-              g.push_back(atof(sub.c_str()));
-            }
-
-            if (chr.genomic_element_types.count(i) > 0) {
-              cerr << "ERROR (initialize): genomic element type " << i
+            if (chr.genomic_element_types.count(genomic_line.id) > 0) {
+              cerr << "ERROR (initialize): genomic element type " << genomic_line.id
                    << " already defined" << endl;
               exit(1);
             }
-
+            //TODO: Instead 2 pairs do a pair of pair<pair<int,int>,genomic_element_type>
             chr.genomic_element_types.insert(
-                pair<int, genomic_element_type>(i, genomic_element_type(m, g)));
+                pair<int, genomic_element_type>(genomic_line.id, genomic_element_type(genomic_line.mutations, genomic_line.fractions)));
           }
           get_line(infile, line);
         }
