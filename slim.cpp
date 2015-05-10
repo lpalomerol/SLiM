@@ -1,25 +1,25 @@
-/**
- * @file slim.cpp
- *  SLiM: a forward population genetic simulation with selection and linkage
- *
- * version 1.8 (November 4, 2014)
- *
- * Copyright (C) 2013  Philipp Messer
- *
- * compile by:
- *
- * g++ -O3 -I./include/  ./slim.cpp ./src/*.cpp -lgsl -lgslcblas -o slim
- *
- * This program is free software: you can redistribute it and/or modify
- * it under the terms of the GNU General Public License as published by
- * the Free Software Foundation, either version 3 of the License, or
- * (at your option) any later version (http://www.gnu.org/licenses/).
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
- */
+///
+/// @mainpage slim.cpp
+///  SLiM: a forward population genetic simulation with selection and linkage
+///
+/// version 1.8 (November 4, 2014)
+///
+/// Copyright (C) 2013  Philipp Messer
+///
+/// compile by:
+///
+/// g++ -O3 -Iinclude/ slim.cpp src/*.cpp -lgsl -lgslcblas -o slim
+///
+/// This program is free software: you can redistribute it and/or modify
+/// it under the terms of the GNU General Public License as published by
+/// the Free Software Foundation, either version 3 of the License, or
+/// (at your option) any later version (http://www.gnu.org/licenses/).
+///
+/// This program is distributed in the hope that it will be useful,
+/// but WITHOUT ANY WARRANTY; without even the implied warranty of
+/// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+/// GNU General Public License for more details.
+///
 #include <iostream>
 #include <iomanip>
 #include <vector>
@@ -211,7 +211,6 @@ class genomic_element_type {
   gsl_ran_discrete_t* LT;
 
  public:
-  //TODO: Add population id here... or ALL?
   vector<int> m;    /**< mutation types identifiers in this element */
   vector<double> g; /**< relative fractions of each mutation type */
 
@@ -229,9 +228,7 @@ class genomic_element_type {
     LT = gsl_ran_discrete_preproc(G.size(), A);
   }
 
-  int draw_mutation_type() {
-	  return m[gsl_ran_discrete(rng, LT)];
-  }
+  int draw_mutation_type() { return m[gsl_ran_discrete(rng, LT)]; }
 };
 
 class chromosome : public vector<genomic_element> {
@@ -244,6 +241,7 @@ class chromosome : public vector<genomic_element> {
 
  public:
   map<int, mutation_type> mutation_types;
+  // TODO: Add population
   map<int, genomic_element_type> genomic_element_types;
   vector<int> rec_x;
   vector<double> rec_r;
@@ -279,6 +277,11 @@ class chromosome : public vector<genomic_element> {
     L = 0;
 
     for (int i = 0; i < size(); i++) {
+      // TODO: Search by population too?
+      // Here I think searches the different groups of genomic element types in
+      // order to have all initialized.
+      // Must validate that all genomic types must be defined for all
+      // populations.
       if (genomic_element_types.count(operator[](i).i) == 0) {
         cerr << "ERROR (initialize): genomic element type " << operator[](i).i
              << " not defined" << endl;
@@ -286,6 +289,7 @@ class chromosome : public vector<genomic_element> {
       }
     }
 
+    //These loops are validating that all the mutations are valid.
     for (map<int, genomic_element_type>::iterator it =
              genomic_element_types.begin();
          it != genomic_element_types.end(); it++) {
@@ -328,6 +332,7 @@ class chromosome : public vector<genomic_element> {
 
   mutation draw_new_mut(int i, int g) {
     int ge = gsl_ran_discrete(rng, LT_M);  // genomic element
+    //TODO: Search using the population number (or 0 by default)
     genomic_element_type ge_type = genomic_element_types.find(operator[](ge).i)
                                        ->second;  // genomic element type
 
@@ -2761,14 +2766,16 @@ void initialize(population& P, char* file, chromosome& chr, int& t_start,
             genomicElementTypesLine genomic_line;
             genomic_line = translate_genomic_elements_type_line(line);
 
-            if (chr.genomic_element_types.count(genomic_line.id) > 0) {
-              cerr << "ERROR (initialize): genomic element type " << genomic_line.id
-                   << " already defined" << endl;
+            if (chr.genomic_element_types.count(genomic_line.genomic_id) > 0) {
+              cerr << "ERROR (initialize): genomic element type "
+                   << genomic_line.genomic_id << " already defined" << endl;
               exit(1);
             }
-            //TODO: Instead 2 pairs do a pair of pair<pair<int,int>,genomic_element_type>
-            chr.genomic_element_types.insert(
-                pair<int, genomic_element_type>(genomic_line.id, genomic_element_type(genomic_line.mutations, genomic_line.fractions)));
+            // TODO: Instead 2 pairs do a pair of
+            // pair<pair<int,int>,genomic_element_type>
+            chr.genomic_element_types.insert(pair<int, genomic_element_type>(
+                genomic_line.genomic_id, genomic_element_type(genomic_line.mutations,
+                                                      genomic_line.fractions)));
           }
           get_line(infile, line);
         }
@@ -2989,6 +2996,7 @@ void initialize(population& P, char* file, chromosome& chr, int& t_start,
     cout << parameters[i] << endl;
   }
 }
+
 
 int main(int argc, char* argv[]) {
   // initialize simulation parameters
