@@ -200,7 +200,6 @@ class genomic_element {
 
 class genomic_element_type {
   /** @class genomic_element_tpe
-   * TODO: Add different populations for the genomes
    * a genomic element type is specified by a vector of the mutation type
    * identifiers off all
    * mutation types than can occur in such elements and a vector of their
@@ -241,8 +240,7 @@ class chromosome : public vector<genomic_element> {
 
  public:
   map<int, mutation_type> mutation_types;
-  // TODO: Add population
-  map<int, genomic_element_type> genomic_element_types;
+  map<pair<int, int>, genomic_element_type> genomic_element_types;
   vector<int> rec_x;
   vector<double> rec_r;
 
@@ -260,7 +258,13 @@ class chromosome : public vector<genomic_element> {
     G_l = 0.0;
   }
 
-  void initialize_rng() {
+  /**
+   * @brief Validates the incoming chromosome
+   * @param subpopulations List whith all subpopulations related with the
+   * experiment.
+   *                       Are defined at "demography and structure" section
+   */
+  void validate(vector<int> subpopulations) {
     if (size() == 0) {
       cerr << "ERROR (initialize): empty chromosome" << endl;
       exit(1);
@@ -273,24 +277,23 @@ class chromosome : public vector<genomic_element> {
       cerr << "ERROR (initialize): invalid mutation rate" << endl;
       exit(1);
     }
-
-    L = 0;
-
-    for (int i = 0; i < size(); i++) {
-      // TODO: Search by population too?
-      // Here I think searches the different groups of genomic element types in
-      // order to have all initialized.
-      // Must validate that all genomic types must be defined for all
-      // populations.
-      if (genomic_element_types.count(operator[](i).i) == 0) {
-        cerr << "ERROR (initialize): genomic element type " << operator[](i).i
-             << " not defined" << endl;
-        exit(1);
+    for (int i = 1; i <= subpopulations.size(); i++) {
+      for (int j = 0; j < size(); j++) {
+        // Here validates that at least exist one default genomic element type.
+        pair<int, int> row_default = make_pair(0, operator[](j).i);
+        pair<int, int> row_custom_pop = make_pair(i, operator[](j).i);
+        if (genomic_element_types.count(row_default) == 0 &&
+            genomic_element_types.count(row_custom_pop) == 0) {
+          cerr << "ERROR (initialize): genomic element type (" << i << ","
+               << operator[](j).i
+               << ") not defined, it must have at least a default." << endl;
+          exit(1);
+        }
       }
     }
-
-    //These loops are validating that all the mutations are valid.
-    for (map<int, genomic_element_type>::iterator it =
+    // TODO: Add tests
+    // Validates that all the mutation types are well defined.
+    for (map<pair<int, int>, genomic_element_type>::iterator it =
              genomic_element_types.begin();
          it != genomic_element_types.end(); it++) {
       for (int j = 0; j < it->second.m.size(); j++) {
@@ -301,6 +304,11 @@ class chromosome : public vector<genomic_element> {
         }
       }
     }
+  }
+
+  void initialize_rng() {
+
+    L = 0;
 
     double A[size()];
     int l = 0;
@@ -330,11 +338,16 @@ class chromosome : public vector<genomic_element> {
 
   int draw_n_mut() { return gsl_ran_poisson(rng, M); }
 
-  mutation draw_new_mut(int i, int g) {
+  mutation draw_new_mut(int pop_id, int g) {
     int ge = gsl_ran_discrete(rng, LT_M);  // genomic element
-    //TODO: Search using the population number (or 0 by default)
-    genomic_element_type ge_type = genomic_element_types.find(operator[](ge).i)
-                                       ->second;  // genomic element type
+    pair<int, int> key;
+    if (genomic_element_types.count(make_pair(pop_id, operator[](ge).i)) > 0) {
+      key = (std::make_pair(pop_id, operator[](ge).i));
+    } else {
+      key = (std::make_pair(0, operator[](ge).i));
+    }
+    genomic_element_type ge_type =
+        genomic_element_types.find(key)->second;  // genomic element type
 
     int mut_type_id = ge_type.draw_mutation_type();  // mutation type id
     mutation_type mut_type =
@@ -345,7 +358,7 @@ class chromosome : public vector<genomic_element> {
                 rng, operator[](ge).e - operator[](ge).s + 1);  // position
     float s = mut_type.draw_s();  // selection coefficient
 
-    return mutation(mut_type_id, x, s, i, g);
+    return mutation(mut_type_id, x, s, pop_id, g);
   }
 
   vector<int> draw_breakpoints() {
@@ -2059,6 +2072,15 @@ void check_input_file(char* file) {
             istringstream iss(line);
             iss >> sub;
 
+            if (sub.compare(0, 1, "p") == 0) {
+              sub.erase(0, 1);
+
+              if (sub.find_first_not_of("1234567890") != string::npos) {
+                good = 0;
+              }
+              iss >> sub;
+            }  // optional population id
+
             if (sub.compare(0, 1, "g") != 0) {
               good = 0;
             }
@@ -2067,6 +2089,7 @@ void check_input_file(char* file) {
             if (sub.find_first_not_of("1234567890") != string::npos) {
               good = 0;
             }  // id
+
             if (iss.eof()) {
               good = 0;
             }
@@ -2694,7 +2717,7 @@ void initialize(population& P, char* file, chromosome& chr, int& t_start,
                 vector<partial_sweep>& PS, vector<string>& parameters) {
   string line;
   string sub;
-
+  vector<int> subpopulations;
   ifstream infile(file);
 
   long pid = getpid();
@@ -2763,19 +2786,20 @@ void initialize(population& P, char* file, chromosome& chr, int& t_start,
         while (line.find('#') == string::npos && !infile.eof()) {
           if (line.length() > 0) {
             parameters.push_back(line);
-            genomicElementTypesLine genomic_line;
+            genomic_element_types_line genomic_line;
             genomic_line = translate_genomic_elements_type_line(line);
-
-            if (chr.genomic_element_types.count(genomic_line.genomic_id) > 0) {
+            pair<int, int> key =
+                make_pair(genomic_line.pop_id, genomic_line.genomic_id);
+            if (chr.genomic_element_types.count(key) > 0) {
               cerr << "ERROR (initialize): genomic element type "
                    << genomic_line.genomic_id << " already defined" << endl;
               exit(1);
             }
-            // TODO: Instead 2 pairs do a pair of
-            // pair<pair<int,int>,genomic_element_type>
-            chr.genomic_element_types.insert(pair<int, genomic_element_type>(
-                genomic_line.genomic_id, genomic_element_type(genomic_line.mutations,
-                                                      genomic_line.fractions)));
+
+            chr.genomic_element_types.insert(
+                pair<pair<int, int>, genomic_element_type>(
+                    key, genomic_element_type(genomic_line.mutations,
+                                              genomic_line.fractions)));
           }
           get_line(infile, line);
         }
@@ -2866,19 +2890,27 @@ void initialize(population& P, char* file, chromosome& chr, int& t_start,
 
             // FORMAT: t event_type event_parameters
 
-            int t;
-            char c;
+            int time;
+            char event_type;
             vector<string> s;
             istringstream iss(line);
             iss >> sub;
-            t = (int)atof(sub.c_str());
+            time = (int)atof(sub.c_str());
             iss >> sub;
-            c = sub.at(0);
+            event_type = sub.at(0);
 
             while (iss >> sub) {
+              if (event_type == 'P' &&
+                  sub.at(0) == 'p') {  // Add subpopulation to list, wee need to
+                                       // keep them for validate genomic
+                                       // populations
+                int subpopulation;
+                istringstream(sub.substr(1, sub.length())) >> subpopulation;
+                subpopulations.push_back(subpopulation);
+              }
               s.push_back(sub.c_str());
             }
-            E.insert(pair<int, event>(t, event(c, s)));
+            E.insert(pair<int, event>(time, event(event_type, s)));
           }
           get_line(infile, line);
         }
@@ -2977,7 +3009,7 @@ void initialize(population& P, char* file, chromosome& chr, int& t_start,
   }
 
   // initialize chromosome
-
+  chr.validate(subpopulations);
   chr.initialize_rng();
 
   // initialize rng
@@ -2995,8 +3027,9 @@ void initialize(population& P, char* file, chromosome& chr, int& t_start,
   for (int i = 0; i < P.parameters.size(); i++) {
     cout << parameters[i] << endl;
   }
+  //Cleaning variables
+  subpopulations.clear();
 }
-
 
 int main(int argc, char* argv[]) {
   // initialize simulation parameters

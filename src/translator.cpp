@@ -7,8 +7,8 @@
 #include "translator.h"
 using namespace std;
 
-genomicElementTypesLine translate_genomic_elements_type_line(string line){
-	genomicElementTypesLine line_translated;
+genomic_element_types_line translate_genomic_elements_type_line(string line){
+	genomic_element_types_line line_translated;
 	string sub;
     istringstream iss(line);
     //TODO: Add value for population id
