@@ -655,7 +655,9 @@ class subpopulation {
     LT = gsl_ran_discrete_preproc(N, A);
   }
 
-  int draw_individual() { return gsl_ran_discrete(rng, LT); }
+  int draw_individual() {
+	  return gsl_ran_discrete(rng, LT);
+  }
 
   /**
    * @brief calculate fitnesses in parent population and create new lookup table
@@ -895,32 +897,32 @@ class population : public map<int, subpopulation> {
   /**
    * @brief  set fraction m of i that originates as migrants from j per
    * generation
-   * @param i Destination Population Id
-   * @param j Source population Id
-   * @param m Fraction of migrants per generation, between 0 and 1
+   * @param destination Destination Population Id
+   * @param source Source population Id
+   * @param ratio Fraction of migrants per generation, between 0 and 1
    * @return void
    */
-  void set_migration(int i, int j, double m) {
+  void set_migration(int destination, int source, double ratio) {
 
-    if (count(i) == 0) {
-      cerr << "ERROR (set migration): no subpopulation p" << i << endl;
+    if (count(destination) == 0) {
+      cerr << "ERROR (set migration): no subpopulation p" << destination << endl;
       exit(1);
     }
-    if (count(j) == 0) {
-      cerr << "ERROR (set migration): no subpopulation p" << j << endl;
+    if (count(source) == 0) {
+      cerr << "ERROR (set migration): no subpopulation p" << source << endl;
       exit(1);
     }
-    if (m < 0.0 || m > 1.0) {
+    if (ratio < 0.0 || ratio > 1.0) {
       cerr << "ERROR (set migration): migration fraction has to be within [0,1]"
            << endl;
       exit(1);
     }
 
-    if (find(i)->second.m.count(j) != 0) {
-      find(i)->second.m.erase(j);
+    if (find(destination)->second.m.count(source) != 0) {
+      find(destination)->second.m.erase(source);
     }
 
-    find(i)->second.m.insert(pair<int, double>(j, m));
+    find(destination)->second.m.insert(pair<int, double>(source, ratio));
   }
 
   /**
@@ -989,11 +991,11 @@ class population : public map<int, subpopulation> {
       string sub2 = E.s[1];
       sub2.erase(0, 1);
 
-      int i = atoi(sub1.c_str());
-      int j = atoi(sub2.c_str());
-      double m = atof(E.s[2].c_str());
+      int destination = atoi(sub1.c_str());
+      int source = atoi(sub2.c_str());
+      double rate = atof(E.s[2].c_str());
 
-      set_migration(i, j, m);
+      set_migration(destination, source, rate);
     }
 
     if (type == 'A')  // output state of entire population
@@ -1213,7 +1215,15 @@ class population : public map<int, subpopulation> {
     }
   }
   /**
-   * @brief Evolves subpopulation a new generation
+   * @brief Evolves subpopulation a new generation.
+   *        First of all are included the
+   *        migrant populations. Later, the rest of the population group is included.
+   *        For example, when there are 2 subpopulations P and Q, with 10 individuals
+   *        each one, if the population P has a migration rate of 0.2 from population
+   *        Q, two of the new individuals of population P will be chosen randomly (taking
+   *        care of fitness), later, the other 8 are individuals will be reproduced from
+   *        population P.
+   *
    * @param i Subpopulation id
    * @param chr Chromosome related
    * @param g Generation number
@@ -1297,7 +1307,6 @@ class population : public map<int, subpopulation> {
     }
 
     // remainder
-
     while (child_count < find(i)->second.N) {
       g1 = 2 * child_map[child_count];      // child genome 1
       g2 = 2 * child_map[child_count] + 1;  // child genome 2
