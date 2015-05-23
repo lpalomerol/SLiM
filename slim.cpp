@@ -102,12 +102,12 @@ class event {
   vector<string> s; /**< vector of strings with parameters of event */
   int np;           /**< number of parameters */
 
-  event(char T, vector<string> S) {
-    t = T;
-    s = S;
+  event(char type, vector<string> event_names) {
+    t = type;
+    s = event_names;
     np = s.size();
 
-    string options = "PNMSRFAT";
+    string options = "PNMStRFAT";
     if (options.find(t) == string::npos) {
       cerr << "ERROR (initialize): invalid event type \"" << t;
       for (int i = 0; i < np; i++) {
@@ -636,6 +636,7 @@ class subpopulation {
  public:
   int N;    /**< population size */
   double S; /**< selfing fraction */
+  int T;    /**< threshold ratio */
 
   vector<genome> G_parent;
   vector<genome> G_child;
@@ -646,6 +647,7 @@ class subpopulation {
   subpopulation(int n) {
     N = n;
     S = 0.0;
+    T = 0;
     G_parent.resize(2 * N);
     G_child.resize(2 * N);
     double A[N];
@@ -655,9 +657,7 @@ class subpopulation {
     LT = gsl_ran_discrete_preproc(N, A);
   }
 
-  int draw_individual() {
-	  return gsl_ran_discrete(rng, LT);
-  }
+  int draw_individual() { return gsl_ran_discrete(rng, LT); }
 
   /**
    * @brief calculate fitnesses in parent population and create new lookup table
@@ -905,7 +905,8 @@ class population : public map<int, subpopulation> {
   void set_migration(int destination, int source, double ratio) {
 
     if (count(destination) == 0) {
-      cerr << "ERROR (set migration): no subpopulation p" << destination << endl;
+      cerr << "ERROR (set migration): no subpopulation p" << destination
+           << endl;
       exit(1);
     }
     if (count(source) == 0) {
@@ -923,6 +924,30 @@ class population : public map<int, subpopulation> {
     }
 
     find(destination)->second.m.insert(pair<int, double>(source, ratio));
+  }
+
+  /**
+   * Defines the reproduction threshold for a population.
+   * The thresold is like chosing a group of individuals for being the parents
+   * of the next generation
+   * @param population The subpopulation id
+   * @param threshold  The new population threshold
+   */
+  void set_threshold(int subpopulation, int threshold) {
+    if (count(subpopulation) == 0) {
+      cerr << "ERROR (set threshold): no subpopulation source " << subpopulation
+           << endl;
+      exit(1);
+    }
+    if (threshold < 0) {
+      cerr << "ERROR (set threshold): migration threshold has to be equal or "
+              "greater than 1" << endl;
+      exit(1);
+    }
+    // If threshold is greater than population means we want cross all
+    // individuals.
+    find(subpopulation)->second.T =
+        (find(subpopulation)->second.N > threshold ? threshold : 0);
   }
 
   /**
@@ -996,6 +1021,15 @@ class population : public map<int, subpopulation> {
       double rate = atof(E.s[2].c_str());
 
       set_migration(destination, source, rate);
+    }
+
+    if (type == 't')  // set threshold rate
+    {
+      string sub1 = E.s[0];
+      sub1.erase(0, 1);
+      int subpopulation = atoi(sub1.c_str());
+      int threshold = atoi(E.s[1].c_str());
+      set_threshold(subpopulation, threshold);
     }
 
     if (type == 'A')  // output state of entire population
@@ -1217,11 +1251,16 @@ class population : public map<int, subpopulation> {
   /**
    * @brief Evolves subpopulation a new generation.
    *        First of all are included the
-   *        migrant populations. Later, the rest of the population group is included.
-   *        For example, when there are 2 subpopulations P and Q, with 10 individuals
-   *        each one, if the population P has a migration rate of 0.2 from population
-   *        Q, two of the new individuals of population P will be chosen randomly (taking
-   *        care of fitness), later, the other 8 are individuals will be reproduced from
+   *        migrant populations. Later, the rest of the population group is
+   *included.
+   *        For example, when there are 2 subpopulations P and Q, with 10
+   *individuals
+   *        each one, if the population P has a migration rate of 0.2 from
+   *population
+   *        Q, two of the new individuals of population P will be chosen
+   *randomly (taking
+   *        care of fitness), later, the other 8 are individuals will be
+   *reproduced from
    *        population P.
    *
    * @param i Subpopulation id
@@ -2278,11 +2317,12 @@ void check_input_file(char* file) {
               good = 0;
             }
             iss >> sub;
-            if (sub.find_first_not_of("PSMN") != string::npos) {
+            if (sub.find_first_not_of("PSMNT") != string::npos) {
               good = 0;
             }  // event type
 
-            if (sub.compare("P") == 0)  // two or three positive integers
+            if (sub.compare("P") == 0 ||
+                sub.compare("T"))  // two or three positive integers
             {
               if (iss.eof()) {
                 good = 0;
@@ -2909,6 +2949,9 @@ void initialize(population& P, char* file, chromosome& chr, int& t_start,
             event_type = sub.at(0);
 
             while (iss >> sub) {
+              if (event_type == 'T') {
+                event_type = 't';
+              }
               if (event_type == 'P' &&
                   sub.at(0) == 'p') {  // Add subpopulation to list, wee need to
                                        // keep them for validate genomic
@@ -3036,7 +3079,7 @@ void initialize(population& P, char* file, chromosome& chr, int& t_start,
   for (int i = 0; i < P.parameters.size(); i++) {
     cout << parameters[i] << endl;
   }
-  //Cleaning variables
+  // Cleaning variables
   subpopulations.clear();
 }
 
