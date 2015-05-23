@@ -224,3 +224,21 @@ TEST(test_population_set_threshold,
 	pop.set_threshold(1, 200);
 	EXPECT_EQ(0, pop.find(1)->second.T);
 }
+
+TEST(test_select_threshold, should_define_threshold_genome_when_defined){
+	chromosome chr;
+	population pop;
+	int seed = 1;
+	pop.add_subpopulation(1, 1000);
+	subpopulation subpop = pop.find(1)->second;
+	subpop.update_fitness(chr);
+	subpop.T = 500;
+
+    rng = gsl_rng_alloc(gsl_rng_taus2);
+
+
+	subpop.select_threshold();
+	EXPECT_EQ(500, subpop.G_parent_threshold.size());
+}
+
+//TEST(test_select_threshold, should_fail_when_threshold_is_0);
