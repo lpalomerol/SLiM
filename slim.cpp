@@ -102,12 +102,12 @@ class event {
   vector<string> s; /**< vector of strings with parameters of event */
   int np;           /**< number of parameters */
 
-  event(char T, vector<string> S) {
-    t = T;
-    s = S;
+  event(char type, vector<string> event_names) {
+    t = type;
+    s = event_names;
     np = s.size();
 
-    string options = "PNMSRFAT";
+    string options = "PNMStRFAT";
     if (options.find(t) == string::npos) {
       cerr << "ERROR (initialize): invalid event type \"" << t;
       for (int i = 0; i < np; i++) {
@@ -320,6 +320,7 @@ class chromosome : public vector<genomic_element> {
       A[i] = (double)l_i;
       l += l_i;
     }
+
     LT_M = gsl_ran_discrete_preproc(size(), A);
     M = M * (double)l;
 
@@ -632,13 +633,16 @@ class subpopulation {
 
  private:
   gsl_ran_discrete_t* LT;
+  gsl_ran_discrete_t* LT_TH;
 
  public:
   int N;    /**< population size */
   double S; /**< selfing fraction */
+  int T;    /**< threshold ratio */
 
   vector<genome> G_parent;
   vector<genome> G_child;
+  vector<genome> G_parent_threshold;
 
   map<int, double> m;  // m[i]: fraction made up of migrants from subpopulation
   // i per generation
@@ -646,17 +650,21 @@ class subpopulation {
   subpopulation(int n) {
     N = n;
     S = 0.0;
+    T = 0;
     G_parent.resize(2 * N);
     G_child.resize(2 * N);
+
     double A[N];
     for (int i = 0; i < N; i++) {
       A[i] = 1.0;
     }
     LT = gsl_ran_discrete_preproc(N, A);
+    LT_TH = gsl_ran_discrete_preproc(N, A);
   }
 
   int draw_individual() { return gsl_ran_discrete(rng, LT); }
 
+  int draw_individual_threshold() { return gsl_ran_discrete(rng, LT_TH); }
   /**
    * @brief calculate fitnesses in parent population and create new lookup table
    * @param chr Chromosome population
@@ -665,11 +673,38 @@ class subpopulation {
   void update_fitness(chromosome& chr) {
 
     gsl_ran_discrete_free(LT);
-    double A[(int)(G_parent.size() / 2)];
-    for (int i = 0; i < (int)(G_parent.size() / 2); i++) {
+    int parent_size = (int)(G_parent.size() / 2);
+    double A[parent_size];
+    for (int i = 0; i < parent_size; i++) {
       A[i] = W(2 * i, 2 * i + 1, chr);
     }
-    LT = gsl_ran_discrete_preproc((int)(G_parent.size() / 2), A);
+    LT = gsl_ran_discrete_preproc(parent_size, A);
+  }
+
+  /**
+   * @brief Defines a reproductive subpopulation selecting by a threshold.
+   * @param chr Chromosome population
+   * @return void
+   */
+
+  void select_threshold() {
+    int random;
+
+    G_parent_threshold.clear();
+    for (int i = 0; i < T; i++) {
+      random = gsl_rng_uniform_int(rng, G_parent.size() / 2);
+      G_parent_threshold.push_back(G_parent[random]);
+    }
+  }
+
+  void update_threshold_fitness(chromosome& chr) {
+    gsl_ran_discrete_free(LT_TH);
+    int parent_size = (int)(G_parent_threshold.size() / 2);
+    double A[parent_size];
+    for (int i = 0; i < parent_size; i++) {
+      A[i] = W(2 * i, 2 * i + 1, chr);
+    }
+    LT_TH = gsl_ran_discrete_preproc(parent_size, A);
   }
 
   /**
@@ -895,32 +930,57 @@ class population : public map<int, subpopulation> {
   /**
    * @brief  set fraction m of i that originates as migrants from j per
    * generation
-   * @param i Destination Population Id
-   * @param j Source population Id
-   * @param m Fraction of migrants per generation, between 0 and 1
+   * @param destination Destination Population Id
+   * @param source Source population Id
+   * @param ratio Fraction of migrants per generation, between 0 and 1
    * @return void
    */
-  void set_migration(int i, int j, double m) {
+  void set_migration(int destination, int source, double ratio) {
 
-    if (count(i) == 0) {
-      cerr << "ERROR (set migration): no subpopulation p" << i << endl;
+    if (count(destination) == 0) {
+      cerr << "ERROR (set migration): no subpopulation p" << destination
+           << endl;
       exit(1);
     }
-    if (count(j) == 0) {
-      cerr << "ERROR (set migration): no subpopulation p" << j << endl;
+    if (count(source) == 0) {
+      cerr << "ERROR (set migration): no subpopulation p" << source << endl;
       exit(1);
     }
-    if (m < 0.0 || m > 1.0) {
+    if (ratio < 0.0 || ratio > 1.0) {
       cerr << "ERROR (set migration): migration fraction has to be within [0,1]"
            << endl;
       exit(1);
     }
 
-    if (find(i)->second.m.count(j) != 0) {
-      find(i)->second.m.erase(j);
+    if (find(destination)->second.m.count(source) != 0) {
+      find(destination)->second.m.erase(source);
     }
 
-    find(i)->second.m.insert(pair<int, double>(j, m));
+    find(destination)->second.m.insert(pair<int, double>(source, ratio));
+  }
+
+  /**
+   * Defines the reproduction threshold for a population.
+   * The thresold is like chosing a group of individuals for being the parents
+   * of the next generation
+   * @param population The subpopulation id
+   * @param threshold  The new population threshold
+   */
+  void set_threshold(int subpopulation, int threshold) {
+    if (count(subpopulation) == 0) {
+      cerr << "ERROR (set threshold): no subpopulation source " << subpopulation
+           << endl;
+      exit(1);
+    }
+    if (threshold < 0) {
+      cerr << "ERROR (set threshold): migration threshold has to be equal or "
+              "greater than 1" << endl;
+      exit(1);
+    }
+    // If threshold is greater than population means we want cross all
+    // individuals.
+    find(subpopulation)->second.T =
+        (find(subpopulation)->second.N > threshold ? threshold : 0);
   }
 
   /**
@@ -989,11 +1049,22 @@ class population : public map<int, subpopulation> {
       string sub2 = E.s[1];
       sub2.erase(0, 1);
 
-      int i = atoi(sub1.c_str());
-      int j = atoi(sub2.c_str());
-      double m = atof(E.s[2].c_str());
+      int destination = atoi(sub1.c_str());
+      int source = atoi(sub2.c_str());
+      double rate = atof(E.s[2].c_str());
 
-      set_migration(i, j, m);
+      set_migration(destination, source, rate);
+    }
+
+    if (type == 't')  // set threshold rate, means compute the threshold again
+    {
+      string sub1 = E.s[0];
+      sub1.erase(0, 1);
+      int subpopulation = atoi(sub1.c_str());
+      int threshold = atoi(E.s[1].c_str());
+      set_threshold(subpopulation, threshold);
+      find(subpopulation)->second.select_threshold();
+      find(subpopulation)->second.update_threshold_fitness(chr);
     }
 
     if (type == 'A')  // output state of entire population
@@ -1213,7 +1284,20 @@ class population : public map<int, subpopulation> {
     }
   }
   /**
-   * @brief Evolves subpopulation a new generation
+   * @brief Evolves subpopulation a new generation.
+   *        First of all are included the
+   *        migrant populations. Later, the rest of the population group is
+   *included.
+   *        For example, when there are 2 subpopulations P and Q, with 10
+   *individuals
+   *        each one, if the population P has a migration rate of 0.2 from
+   *population
+   *        Q, two of the new individuals of population P will be chosen
+   *randomly (taking
+   *        care of fitness), later, the other 8 are individuals will be
+   *reproduced from
+   *        population P.
+   *
    * @param i Subpopulation id
    * @param chr Chromosome related
    * @param g Generation number
@@ -1275,10 +1359,11 @@ class population : public map<int, subpopulation> {
         g2 = 2 * child_map[child_count] + 1;  // child genome 2
 
         // draw parents in source population
-
         p1 = gsl_rng_uniform_int(rng,
                                  find(it->first)->second.G_parent.size() / 2);
-        if (gsl_rng_uniform(rng) < find(it->first)->second.S) {
+
+        if (gsl_rng_uniform(rng) <
+            find(it->first)->second.S) {  // Check if is at selfing rate
           p2 = p1;
         } else {
           p2 = gsl_rng_uniform_int(rng,
@@ -1286,9 +1371,8 @@ class population : public map<int, subpopulation> {
         }
 
         // recombination, gene-conversion, mutation
-
-        crossover_mutation(i, g1, it->first, 2 * p1, 2 * p1 + 1, chr, g);
-        crossover_mutation(i, g2, it->first, 2 * p2, 2 * p2 + 1, chr, g);
+        crossover_mutation(i, g1, it->first, 2 * p1, 2 * p1 + 1, chr, g, false);
+        crossover_mutation(i, g2, it->first, 2 * p2, 2 * p2 + 1, chr, g, false);
 
         migrant_count++;
         child_count++;
@@ -1297,21 +1381,26 @@ class population : public map<int, subpopulation> {
     }
 
     // remainder
-
     while (child_count < find(i)->second.N) {
+
       g1 = 2 * child_map[child_count];      // child genome 1
       g2 = 2 * child_map[child_count] + 1;  // child genome 2
 
-      p1 = find(i)->second.draw_individual();  // parent 1
+      if (find(i)->second.T > 0) {
+        p1 = find(i)->second.draw_individual_threshold();  // parent 1 from threshold
+      } else {
+        p1 = find(i)->second.draw_individual();  // parent 1
+      }
+
       if (gsl_rng_uniform(rng) < find(i)->second.S) {
         p2 = p1;
       }  // parent 2
       else {
         p2 = find(i)->second.draw_individual();
       }
-
-      crossover_mutation(i, g1, i, 2 * p1, 2 * p1 + 1, chr, g);
-      crossover_mutation(i, g2, i, 2 * p2, 2 * p2 + 1, chr, g);
+      crossover_mutation(i, g1, i, 2 * p1, 2 * p1 + 1, chr, g,
+                         ((find(i)->second.T > 0) ? true : false));
+      crossover_mutation(i, g2, i, 2 * p2, 2 * p2 + 1, chr, g, false);
 
       child_count++;
     }
@@ -1326,6 +1415,7 @@ class population : public map<int, subpopulation> {
    * @param P2 genome from population 2
    * @param chr Chromosome
    * @param g generation number
+   * @param t Check if parent is from threshold.
    * @return void
    * child genome c in subpopulation i is assigned outcome of cross-overs at
    * breakpoints r
@@ -1338,16 +1428,16 @@ class population : public map<int, subpopulation> {
    * mutations (r1 <= x < r2) assigned from p2
    * mutations (r2 <= x     ) assigned from p1
    *
-   * p1 and p2 are swapped in half of the cases to assure random assortement
+   * p1 and p2 are swapped in half of the cases to assure random assortement.
+   *   This swapping is only done without threshold.
    */
   void crossover_mutation(int i, int c, int j, int P1, int P2, chromosome& chr,
-                          int g) {
-
+                          int g, bool is_threshold = false) {
     if (gsl_rng_uniform_int(rng, 2) == 0) {
       int swap = P1;
       P1 = P2;
       P2 = swap;
-    }  // swap p1 and p2
+    }  // swap p1 and p2 only without threshold.
 
     find(i)->second.G_child[c].clear();
 
@@ -1367,11 +1457,23 @@ class population : public map<int, subpopulation> {
     sort(R.begin(), R.end());
     R.erase(unique(R.begin(), R.end()), R.end());
 
-    vector<mutation>::iterator p1 = find(j)->second.G_parent[P1].begin();
-    vector<mutation>::iterator p2 = find(j)->second.G_parent[P2].begin();
+    vector<mutation>::iterator p1;
+    vector<mutation>::iterator p1_max;
+    vector<mutation>::iterator p2;
+    vector<mutation>::iterator p2_max;
 
-    vector<mutation>::iterator p1_max = find(j)->second.G_parent[P1].end();
-    vector<mutation>::iterator p2_max = find(j)->second.G_parent[P2].end();
+    if (is_threshold == true) {
+      p1 = find(j)->second.G_parent_threshold[P1].begin();
+      p1_max = find(j)->second.G_parent_threshold[P1].end();
+      p2 = find(j)->second.G_parent_threshold[P2].begin();
+      p2_max = find(j)->second.G_parent_threshold[P2].end();
+
+    } else {
+      p1 = find(j)->second.G_parent[P1].begin();
+      p1_max = find(j)->second.G_parent[P1].end();
+      p2 = find(j)->second.G_parent[P2].begin();
+      p2_max = find(j)->second.G_parent[P2].end();
+    }
 
     vector<mutation>::iterator m = M.begin();
     vector<mutation>::iterator m_max = M.end();
@@ -1385,12 +1487,14 @@ class population : public map<int, subpopulation> {
     bool present;
 
     while (r != r_max) {
+
       while ((p != p_max && (*p).x < R[r]) || (m != m_max && (*m).x < R[r])) {
         while (p != p_max && (*p).x < R[r] &&
                (m == m_max || (*p).x <= (*m).x)) {
           present = 0;
           if (n != 0 && find(i)->second.G_child[c].back().x == (*p).x) {
             int k = n - 1;
+
             while (present == 0 && k >= 0) {
               if (find(i)->second.G_child[c][k] == (*p)) {
                 present = 1;
@@ -1398,6 +1502,7 @@ class population : public map<int, subpopulation> {
               k--;
             }
           }
+
           if (present == 0) {
             find(i)->second.G_child[c].push_back(*p);
             n++;
@@ -1423,7 +1528,6 @@ class population : public map<int, subpopulation> {
           m++;
         }
       }
-
       // swap parents
 
       p1 = p2;
@@ -1455,6 +1559,10 @@ class population : public map<int, subpopulation> {
     for (it = begin(); it != end(); it++) {
       it->second.swap();
       it->second.update_fitness(chr);
+      if (it->second.T > 0) {
+        it->second.select_threshold();
+        it->second.update_threshold_fitness(chr);
+      }
     }
   }
   /**
@@ -2269,11 +2377,12 @@ void check_input_file(char* file) {
               good = 0;
             }
             iss >> sub;
-            if (sub.find_first_not_of("PSMN") != string::npos) {
+            if (sub.find_first_not_of("PSMNT") != string::npos) {
               good = 0;
             }  // event type
 
-            if (sub.compare("P") == 0)  // two or three positive integers
+            if (sub.compare("P") == 0 ||
+                sub.compare("T"))  // two or three positive integers
             {
               if (iss.eof()) {
                 good = 0;
@@ -2900,6 +3009,9 @@ void initialize(population& P, char* file, chromosome& chr, int& t_start,
             event_type = sub.at(0);
 
             while (iss >> sub) {
+              if (event_type == 'T') {
+                event_type = 't';
+              }
               if (event_type == 'P' &&
                   sub.at(0) == 'p') {  // Add subpopulation to list, wee need to
                                        // keep them for validate genomic
@@ -3027,7 +3139,7 @@ void initialize(population& P, char* file, chromosome& chr, int& t_start,
   for (int i = 0; i < P.parameters.size(); i++) {
     cout << parameters[i] << endl;
   }
-  //Cleaning variables
+  // Cleaning variables
   subpopulations.clear();
 }
 

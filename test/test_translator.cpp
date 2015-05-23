@@ -2,7 +2,7 @@
 # include "translator.h"
 
 TEST(translate_genomic_elements_type_line_test, validLineNoPop) {
-	genomicElementTypesLine the_line;
+	genomic_element_types_line the_line;
 	the_line = translate_genomic_elements_type_line("g2 m3 0.5");
 	EXPECT_EQ(2, the_line.genomic_id);
 	EXPECT_EQ(0, the_line.pop_id);
@@ -11,7 +11,7 @@ TEST(translate_genomic_elements_type_line_test, validLineNoPop) {
 }
 
 TEST(translate_genomic_elements_type_line_test, validLineWithPop) {
-	genomicElementTypesLine the_line;
+	genomic_element_types_line the_line;
 	the_line = translate_genomic_elements_type_line("p1 g2 m3 0.5");
 	EXPECT_EQ(2, the_line.genomic_id);
 	EXPECT_EQ(1, the_line.pop_id);
