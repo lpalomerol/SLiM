@@ -625,6 +625,18 @@ genome polymorphic(genome& G1, genome& G2) {
 }
 
 class subpopulation {
+public:
+	virtual int draw_individual() = 0;
+	virtual int draw_individual_threshold() = 0;
+	virtual void update_fitness(chromosome& chr) = 0;
+	virtual void select_threshold() = 0;
+	virtual void update_threshold_fitness(chromosome& chr) = 0;
+	virtual double W(int i, int j, chromosome& chr) = 0;
+	virtual void swap() = 0;
+	//virtual ~lol() = 0;
+};
+
+class subpopulation_hermaphrodite:public subpopulation {
   /**
    * @class subpopulation
    *  a subpopulation is described by the vector G of 2N genomes
@@ -647,7 +659,7 @@ class subpopulation {
   map<int, double> m;  // m[i]: fraction made up of migrants from subpopulation
   // i per generation
 
-  subpopulation(int n) {
+  subpopulation_hermaphrodite(int n) {
     N = n;
     S = 0.0;
     T = 0;
@@ -810,7 +822,7 @@ class subpopulation {
   }
 };
 
-class population : public map<int, subpopulation> {
+class population : public map<int, subpopulation_hermaphrodite> {
   /**
    * @class population
    * the population is a map of subpopulations
@@ -818,7 +830,7 @@ class population : public map<int, subpopulation> {
 
  public:
   vector<substitution> Substitutions; /**< The population substitutions */
-  map<int, subpopulation>::iterator it;
+  map<int, subpopulation_hermaphrodite>::iterator it;
 
   vector<string> parameters;
 
@@ -841,7 +853,7 @@ class population : public map<int, subpopulation> {
       exit(1);
     }
 
-    insert(pair<int, subpopulation>(i, subpopulation(N)));
+    insert(pair<int, subpopulation_hermaphrodite>(i, subpopulation_hermaphrodite(N)));
   }
 
   /**
@@ -871,7 +883,7 @@ class population : public map<int, subpopulation> {
       exit(1);
     }
 
-    insert(pair<int, subpopulation>(i, subpopulation(N)));
+    insert(pair<int, subpopulation_hermaphrodite>(i, subpopulation_hermaphrodite(N)));
 
     for (int p = 0; p < find(i)->second.N; p++) {
       // draw individual from subpopulation j and assign to be a parent in i
@@ -3159,7 +3171,7 @@ int main(int argc, char* argv[]) {
   chromosome chr;
 
   population P;
-  map<int, subpopulation>::iterator itP;
+  map<int, subpopulation_hermaphrodite>::iterator itP;
 
   P.parameters.push_back("#INPUT PARAMETER FILE");
   P.parameters.push_back(input_file);

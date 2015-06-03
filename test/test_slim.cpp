@@ -230,7 +230,7 @@ TEST(test_select_threshold, should_define_threshold_genome_when_defined){
 	population pop;
 	int seed = 1;
 	pop.add_subpopulation(1, 1000);
-	subpopulation subpop = pop.find(1)->second;
+	subpopulation_hermaphrodite subpop = pop.find(1)->second;
 	subpop.update_fitness(chr);
 	subpop.T = 500;
 

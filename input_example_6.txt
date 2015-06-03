@@ -1,0 +1,35 @@
+/ simple neutral simulation
+
+#MUTATION TYPES  
+m1 0.5 f 0.0 / neutral
+m2 0.5 f 0.10 / advantageous (fixed s=0.01, h=0.5)
+#MUTATION RATE 
+0.01 
+
+#GENOMIC ELEMENT TYPES 
+g1 m1 0.75  m2 0.25/ 1 in 4 mutations is adaptative
+
+#CHROMOSOME ORGANIZATION 
+g1 1 100 / uniform chromosome of length 100 kb
+
+#RECOMBINATION RATE 
+100000 1e-8
+
+#GENERATIONS 
+80
+
+#DEMOGRAPHY AND STRUCTURE 
+1 P p1 500 / one population of 5000 individuals
+1 P p2 500
+1 T p1 499  / Threshold: 300 of the individuals will cross with all others
+ 
+#OUTPUT 
+20 R p1 10 / output sample of 10 genomes
+20 R p2 10 / output sample of 10 genomes
+40 R p1 10
+40 R p2 10
+60 R p1 10
+60 R p2 10
+80 R p1 10
+80 R p2 10
+80 F / output fixed mutations
