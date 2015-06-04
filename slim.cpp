@@ -623,20 +623,21 @@ genome polymorphic(genome& G1, genome& G2) {
 
   return G;
 }
-
-class subpopulation {
+/*
+class LOL {
 public:
-	virtual int draw_individual() = 0;
-	virtual int draw_individual_threshold() = 0;
-	virtual void update_fitness(chromosome& chr) = 0;
-	virtual void select_threshold() = 0;
-	virtual void update_threshold_fitness(chromosome& chr) = 0;
-	virtual double W(int i, int j, chromosome& chr) = 0;
-	virtual void swap() = 0;
-	//virtual ~lol() = 0;
+        virtual int draw_individual() = 0;
+        virtual int draw_individual_threshold() = 0;
+        virtual void update_fitness(chromosome& chr) = 0;
+        virtual void select_threshold() = 0;
+        virtual void update_threshold_fitness(chromosome& chr) = 0;
+        virtual double W(int i, int j, chromosome& chr) = 0;
+        virtual void swap() = 0;
+        //virtual ~lol() = 0;
 };
-
-class subpopulation_hermaphrodite:public subpopulation {
+*/
+// class subpopulation_hermaphrodite:public subpopulation {
+class subpopulation {
   /**
    * @class subpopulation
    *  a subpopulation is described by the vector G of 2N genomes
@@ -659,7 +660,7 @@ class subpopulation_hermaphrodite:public subpopulation {
   map<int, double> m;  // m[i]: fraction made up of migrants from subpopulation
   // i per generation
 
-  subpopulation_hermaphrodite(int n) {
+  subpopulation(int n) {
     N = n;
     S = 0.0;
     T = 0;
@@ -822,7 +823,7 @@ class subpopulation_hermaphrodite:public subpopulation {
   }
 };
 
-class population : public map<int, subpopulation_hermaphrodite> {
+class population : public map<int, subpopulation> {
   /**
    * @class population
    * the population is a map of subpopulations
@@ -830,7 +831,7 @@ class population : public map<int, subpopulation_hermaphrodite> {
 
  public:
   vector<substitution> Substitutions; /**< The population substitutions */
-  map<int, subpopulation_hermaphrodite>::iterator it;
+  map<int, subpopulation>::iterator it;
 
   vector<string> parameters;
 
@@ -853,7 +854,7 @@ class population : public map<int, subpopulation_hermaphrodite> {
       exit(1);
     }
 
-    insert(pair<int, subpopulation_hermaphrodite>(i, subpopulation_hermaphrodite(N)));
+    insert(pair<int, subpopulation>(i, subpopulation(N)));
   }
 
   /**
@@ -883,7 +884,7 @@ class population : public map<int, subpopulation_hermaphrodite> {
       exit(1);
     }
 
-    insert(pair<int, subpopulation_hermaphrodite>(i, subpopulation_hermaphrodite(N)));
+    insert(pair<int, subpopulation>(i, subpopulation(N)));
 
     for (int p = 0; p < find(i)->second.N; p++) {
       // draw individual from subpopulation j and assign to be a parent in i
@@ -1399,7 +1400,8 @@ class population : public map<int, subpopulation_hermaphrodite> {
       g2 = 2 * child_map[child_count] + 1;  // child genome 2
 
       if (find(i)->second.T > 0) {
-        p1 = find(i)->second.draw_individual_threshold();  // parent 1 from threshold
+        p1 = find(
+            i)->second.draw_individual_threshold();  // parent 1 from threshold
       } else {
         p1 = find(i)->second.draw_individual();  // parent 1
       }
@@ -2641,6 +2643,28 @@ void check_input_file(char* file) {
           }
           get_line(infile, line);
         }
+      } else if (line.find("HERMAPHRODITES") != string::npos) {
+        get_line(infile, line);
+        while (line.find('#') == string::npos && !infile.eof()) {
+          if (line.length() > 0) {
+            int good = 1;
+
+            istringstream iss(line);
+            iss >> sub;
+            if (sub.find_first_not_of("10") != string::npos) {
+              good = 0;
+            }
+            if (!iss.eof()) {
+              good = 0;
+            }
+
+            if (good == 0) {
+              input_error(10, line);
+            }
+          }
+          get_line(infile, line);
+        }
+
       } else if (line.find("PREDETERMINED MUTATIONS") != string::npos) {
         get_line(infile, line);
         while (line.find('#') == string::npos && !infile.eof()) {
@@ -2841,6 +2865,8 @@ void initialize(population& P, char* file, chromosome& chr, int& t_start,
   vector<int> subpopulations;
   ifstream infile(file);
 
+  int hermaphrodites = 1;
+
   long pid = getpid();
   time_t* tp, t;
   tp = &t;
@@ -3038,6 +3064,10 @@ void initialize(population& P, char* file, chromosome& chr, int& t_start,
           }
           get_line(infile, line);
         }
+      } else if (line.find("HERMAPHRODITES") != string::npos) {
+        get_line(infile, line);
+        parameters.push_back("#HERMAPHRODITES");
+        hermaphrodites = translate_hermaphrodite_line(line);
       } else if (line.find("OUTPUT") != string::npos) {
         get_line(infile, line);
         parameters.push_back("#OUTPUT");
@@ -3171,7 +3201,7 @@ int main(int argc, char* argv[]) {
   chromosome chr;
 
   population P;
-  map<int, subpopulation_hermaphrodite>::iterator itP;
+  map<int, subpopulation>::iterator itP;
 
   P.parameters.push_back("#INPUT PARAMETER FILE");
   P.parameters.push_back(input_file);

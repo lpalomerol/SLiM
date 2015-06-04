@@ -31,3 +31,12 @@ genomic_element_types_line translate_genomic_elements_type_line(string line){
 
 	return line_translated;
 }
+
+int translate_hermaphrodite_line(string line){
+	int hermaphrodite_code;
+	string sub;
+	istringstream iss(line);
+	iss >> sub;
+	hermaphrodite_code = atoi(sub.c_str());
+	return hermaphrodite_code;
+}

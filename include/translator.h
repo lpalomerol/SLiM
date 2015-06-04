@@ -14,5 +14,6 @@ struct genomic_element_types_line {
 };
 
 genomic_element_types_line translate_genomic_elements_type_line(std::string);
+int translate_hermaphrodite_line(std::string);
 
 #endif /* TRANSLATOR_H_ */
