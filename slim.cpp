@@ -625,10 +625,14 @@ genome polymorphic(genome& G1, genome& G2) {
 }
 
 class subpopulation {
+ protected:
+  gsl_ran_discrete_t* LT;
+  gsl_ran_discrete_t* LT_TH;
  public:
   int N;    /**< population size */
   double S; /**< selfing fraction */
   int T;    /**< threshold ratio */
+
 
   vector<genome> G_parent;
   vector<genome> G_child;
@@ -637,49 +641,7 @@ class subpopulation {
   map<int, double> m;  // m[i]: fraction made up of migrants from subpopulation
                        // i per generation
 
-  virtual int draw_individual() = 0;
-  virtual int draw_individual_threshold() = 0;
-  virtual void update_fitness(chromosome& chr) = 0;
-  virtual void select_threshold() = 0;
-  virtual void update_threshold_fitness(chromosome& chr) = 0;
-  virtual double W(int i, int j, chromosome& chr) = 0;
-  virtual void swap() = 0;
-  subpopulation() {};
-  ~subpopulation() {};
-};
-
-class subpopulation_sexed : public subpopulation {
-  /**
-   * @class subpopulation_hermaphrodite
-   *  a subpopulation is described by the vector G of 2N genomes
-   *  individual i is constituted by the two genomes 2*i and 2*i+1
-   */
-
- private:
-  gsl_ran_discrete_t* LT;
-  gsl_ran_discrete_t* LT_TH;
-
- public:
-  subpopulation_sexed(int n) {
-    N = n;
-    S = 0.0;
-    T = 0;
-    G_parent.resize(2 * N);
-    G_child.resize(2 * N);
-
-    double A[N];
-    for (int i = 0; i < N; i++) {
-      A[i] = 1.0;
-    }
-    LT = gsl_ran_discrete_preproc(N, A);
-    LT_TH = gsl_ran_discrete_preproc(N, A);
-  }
-
-  ~subpopulation_sexed() {
-    G_parent.clear();
-    G_child.clear();
-    G_parent_threshold.clear();
-  }
+  virtual void set_selfing(double s) = 0;
 
   int draw_individual() { return gsl_ran_discrete(rng, LT); }
 
@@ -689,16 +651,7 @@ class subpopulation_sexed : public subpopulation {
    * @param chr Chromosome population
    * @return void
    */
-  void update_fitness(chromosome& chr) {
-
-    gsl_ran_discrete_free(LT);
-    int parent_size = (int)(G_parent.size() / 2);
-    double A[parent_size];
-    for (int i = 0; i < parent_size; i++) {
-      A[i] = W(2 * i, 2 * i + 1, chr);
-    }
-    LT = gsl_ran_discrete_preproc(parent_size, A);
-  }
+  virtual void update_fitness(chromosome& chr) = 0;
 
   /**
    * @brief Defines a reproductive subpopulation selecting by a threshold.
@@ -822,10 +775,148 @@ class subpopulation_sexed : public subpopulation {
 
     return w;
   }
+  virtual void swap() = 0;
+  subpopulation() {};
+  ~subpopulation() {};
+
+  virtual int draw_individual_by_sex(bool male) = 0;
+  virtual void child_is_male(int i, bool male) {}
+  virtual void parent_is_male(int i, bool male) {};
+  virtual bool parent_is_male(int i) = 0;
+};
+
+class subpopulation_sexed : public subpopulation {
+  /**
+   * @class subpopulation_sexed
+   *  a subpopulation is described by the vector G of 2N genomes
+   *  individual i is constituted by the two genomes 2*i and 2*i+1
+   */
+
+ private:
+  gsl_ran_discrete_t* LT_males;
+  gsl_ran_discrete_t* LT_females;
+
+ public:
+  float sex_ratio;
+  vector<genome> G_parent_male;
+  vector<genome> G_parent_female;
+  vector<bool> males_parent;
+  vector<bool> males_child;
+
+  subpopulation_sexed(int n) {
+    N = n;
+    S = 0.0;
+    T = 0;
+
+    sex_ratio = 1.0;
+
+    G_parent.resize(2 * N);
+    G_child.resize(2 * N);
+
+    males_parent.resize(N);
+    males_child.resize(N);
+
+    double All[N];
+    double Males[N];
+    double Females[N];
+    for (int i = 0; i < N; i++) {
+      All[i] = 1.0;
+      males_parent[i] = (gsl_ran_binomial(rng, 0.5, 1) == 1);
+      if (males_parent[i] == true) {
+        Males[i] = 1.0;
+        Females[i] = 0;
+      } else {
+        Males[i] = 0;
+        Females[i] = 1.0;
+      }
+    }
+
+    LT = gsl_ran_discrete_preproc(N, All);
+    LT_TH = gsl_ran_discrete_preproc(N, All);
+    LT_males = gsl_ran_discrete_preproc(N, Males);
+    LT_females = gsl_ran_discrete_preproc(N, Females);
+  }
+
+  void set_selfing(double s) {}
+
+  void child_is_male(int i, bool male) { males_child[i] = male; }
+
+  bool parent_is_male(int i) { return males_parent[i] == true; }
+  void parent_is_male(int i, bool male) { males_parent[i] = male; }
+
+  ~subpopulation_sexed() {
+    G_parent.clear();
+    G_child.clear();
+    G_parent_male.clear();
+    G_parent_female.clear();
+    G_parent_threshold.clear();
+    males_child.clear();
+    males_parent.clear();
+  }
+
+  int draw_individual_by_sex(bool male) {
+    return gsl_ran_discrete(rng, (male == true) ? LT_males : LT_females);
+  }
+
+  int draw_individual_threshold() { return gsl_ran_discrete(rng, LT_TH); }
+  /**
+   * @brief calculate fitnesses in parent population and create new lookup table
+   * @param chr Chromosome population
+   * @return void
+   */
+  void update_fitness(chromosome& chr) {
+
+    gsl_ran_discrete_free(LT);
+    int parent_size = (int)(G_parent.size() / 2);
+    double All[parent_size];
+    double Males[parent_size];
+    double Females[parent_size];
+    for (int i = 0; i < parent_size; i++) {
+      All[i] = W(2 * i, 2 * i + 1, chr);
+      if (males_parent[i] == true) {
+        Males[i] = All[i];
+        Females[i] = 0;
+      } else {
+        Males[i] = 0;
+        Females[i] = All[i];
+      }
+    }
+    LT = gsl_ran_discrete_preproc(parent_size, All);
+    LT_males = gsl_ran_discrete_preproc(parent_size, Males);
+    LT_females = gsl_ran_discrete_preproc(parent_size, Females);
+  }
+
+  /**
+   * @brief Defines a reproductive subpopulation selecting by a threshold.
+   * @param chr Chromosome population
+   * @return void
+   */
+
+  void select_threshold() {
+    int random;
+
+    G_parent_threshold.clear();
+    for (int i = 0; i < T; i++) {
+      random = gsl_rng_uniform_int(rng, G_parent.size() / 2);
+      G_parent_threshold.push_back(G_parent[random]);
+    }
+  }
+
+  void update_threshold_fitness(chromosome& chr) {
+    gsl_ran_discrete_free(LT_TH);
+    int parent_size = (int)(G_parent_threshold.size() / 2);
+    double A[parent_size];
+    for (int i = 0; i < parent_size; i++) {
+      A[i] = W(2 * i, 2 * i + 1, chr);
+    }
+    LT_TH = gsl_ran_discrete_preproc(parent_size, A);
+  }
 
   void swap() {
     G_child.swap(G_parent);
     G_child.resize(2 * N);
+    males_parent.swap(males_child);
+    males_child.resize(N);
   }
 };
 
@@ -835,10 +926,6 @@ class subpopulation_hermaphrodite : public subpopulation {
    *  a subpopulation is described by the vector G of 2N genomes
    *  individual i is constituted by the two genomes 2*i and 2*i+1
    */
-
- private:
-  gsl_ran_discrete_t* LT;
-  gsl_ran_discrete_t* LT_TH;
 
  public:
   subpopulation_hermaphrodite(int n) {
@@ -856,15 +943,26 @@ class subpopulation_hermaphrodite : public subpopulation {
     LT_TH = gsl_ran_discrete_preproc(N, A);
   }
 
+  void set_selfing(double s) { S = s; }
+
+  bool parent_is_male(int i) { return true; }
+
+  void child_is_male(int i, bool male) {}
+
+  void parent_is_male(int i, bool male) {}
+
   ~subpopulation_hermaphrodite() {
     G_parent.clear();
     G_child.clear();
     G_parent_threshold.clear();
   }
 
-  int draw_individual() { return gsl_ran_discrete(rng, LT); }
-
-  int draw_individual_threshold() { return gsl_ran_discrete(rng, LT_TH); }
+  /**
+   * @brief Retrieves an individual taking account the selected sex.
+   *        In case of hermaphrodites is not necessary consider this,
+   *        so is an alias of draw_individual
+   */
+  int draw_individual_by_sex(bool male) { return draw_individual(); }
   /**
    * @brief calculate fitnesses in parent population and create new lookup table
    * @param chr Chromosome population
@@ -879,129 +977,6 @@ class subpopulation_hermaphrodite : public subpopulation {
       A[i] = W(2 * i, 2 * i + 1, chr);
     }
     LT = gsl_ran_discrete_preproc(parent_size, A);
-  }
-
-  /**
-   * @brief Defines a reproductive subpopulation selecting by a threshold.
-   * @param chr Chromosome population
-   * @return void
-   */
-
-  void select_threshold() {
-    int random;
-
-    G_parent_threshold.clear();
-    for (int i = 0; i < T; i++) {
-      random = gsl_rng_uniform_int(rng, G_parent.size() / 2);
-      G_parent_threshold.push_back(G_parent[random]);
-    }
-  }
-
-  void update_threshold_fitness(chromosome& chr) {
-    gsl_ran_discrete_free(LT_TH);
-    int parent_size = (int)(G_parent_threshold.size() / 2);
-    double A[parent_size];
-    for (int i = 0; i < parent_size; i++) {
-      A[i] = W(2 * i, 2 * i + 1, chr);
-    }
-    LT_TH = gsl_ran_discrete_preproc(parent_size, A);
-  }
-
-  /**
-   * @brief calculate the fitness of the individual constituted by genomes i and
-   * j in the parent population
-   * @param i First genome id to compute
-   * @param j Second genome id to compute
-   * @param chr chromosome to check
-   * @return double The computed fitness
-   */
-  double W(int i, int j, chromosome& chr) {
-
-    double w = 1.0;
-
-    vector<mutation>::iterator pi = G_parent[i].begin();
-    vector<mutation>::iterator pj = G_parent[j].begin();
-
-    vector<mutation>::iterator pi_max = G_parent[i].end();
-    vector<mutation>::iterator pj_max = G_parent[j].end();
-
-    while (w > 0 && (pi != pi_max || pj != pj_max)) {
-      // advance i while pi.x < pj.x
-
-      while (pi != pi_max && (pj == pj_max || (*pi).x < (*pj).x) && w > 0) {
-        if ((*pi).s != 0) {
-          w = w * (1.0 + chr.mutation_types.find((*pi).t)->second.h * (*pi).s);
-        }
-        pi++;
-      }
-
-      // advance j while pj.x < pi.x
-
-      while (pj != pj_max && (pi == pi_max || (*pj).x < (*pi).x) && w > 0) {
-        if ((*pj).s != 0) {
-          w = w * (1.0 + chr.mutation_types.find((*pj).t)->second.h * (*pj).s);
-        }
-        pj++;
-      }
-
-      // check for homozygotes and heterozygotes at x
-
-      if (pi != pi_max && pj != pj_max && (*pj).x == (*pi).x) {
-        int x = (*pi).x;
-
-        vector<mutation>::iterator pi_start = pi;
-
-        // advance through pi
-
-        while (pi != pi_max && (*pi).x == x && w > 0) {
-          if ((*pi).s != 0.0) {
-            vector<mutation>::iterator temp_j = pj;
-            bool homo = 0;
-
-            while (homo == 0 && temp_j != pj_max && (*temp_j).x == x && w > 0) {
-              if ((*pi).t == (*temp_j).t && (*pi).s == (*temp_j).s) {
-                w = w * (1.0 + (*pi).s);
-                homo = 1;
-              }
-              temp_j++;
-            }
-
-            if (homo == 0) {
-              w = w *
-                  (1.0 + chr.mutation_types.find((*pi).t)->second.h * (*pi).s);
-            }
-          }
-          pi++;
-        }
-
-        // advance through pj
-
-        while (pj != pj_max && (*pj).x == x && w > 0) {
-          if ((*pj).s != 0.0) {
-            vector<mutation>::iterator temp_i = pi_start;
-            bool homo = 0;
-
-            while (homo == 0 && temp_i != pi_max && (*temp_i).x == x && w > 0) {
-              if ((*pj).t == (*temp_i).t && (*pj).s == (*temp_i).s) {
-                homo = 1;
-              }
-              temp_i++;
-            }
-            if (homo == 0) {
-              w = w *
-                  (1.0 + chr.mutation_types.find((*pj).t)->second.h * (*pj).s);
-            }
-          }
-          pj++;
-        }
-      }
-    }
-
-    if (w < 0) {
-      w = 0.0;
-    }
-
-    return w;
   }
 
   void swap() {
@@ -1022,7 +997,7 @@ class population : public map<int, subpopulation*> {
   vector<string> parameters;
 
   int hermaphrodites;
-
+  int sex_ratio;
   population() { hermaphrodites = 1; }
   /**
    * @brief add new empty subpopulation i of size N
@@ -1043,7 +1018,11 @@ class population : public map<int, subpopulation*> {
       exit(1);
     }
 
-    insert(pair<int, subpopulation*>(i, new subpopulation_hermaphrodite(N)));
+    if (hermaphrodites == 1) {
+      insert(pair<int, subpopulation*>(i, new subpopulation_hermaphrodite(N)));
+    } else {
+      insert(pair<int, subpopulation*>(i, new subpopulation_sexed(N)));
+    }
   }
 
   /**
@@ -1073,8 +1052,11 @@ class population : public map<int, subpopulation*> {
       exit(1);
     }
 
-    insert(pair<int, subpopulation_hermaphrodite*>(
-        i, new subpopulation_hermaphrodite(N)));
+    if (hermaphrodites == 1) {
+      insert(pair<int, subpopulation*>(i, new subpopulation_hermaphrodite(N)));
+    } else {
+      insert(pair<int, subpopulation*>(i, new subpopulation_sexed(N)));
+    }
 
     for (int p = 0; p < find(i)->second->N; p++) {
       // draw individual from subpopulation j and assign to be a parent in i
@@ -1084,6 +1066,8 @@ class population : public map<int, subpopulation*> {
       find(i)->second->G_parent[2 * p] = find(j)->second->G_parent[2 * m];
       find(i)->second->G_parent[2 * p + 1] =
           find(j)->second->G_parent[2 * m + 1];
+      bool male = find(j)->second->parent_is_male(m);
+      find(i)->second->parent_is_male(p, male);
     }
   }
   /**
@@ -1125,6 +1109,12 @@ class population : public map<int, subpopulation*> {
     if (s < 0.0 || s > 1.0) {
       cerr << "ERROR (set selfing): selfing fraction has to be within [0,1]"
            << endl;
+      exit(1);
+    }
+
+    if (hermaphrodites == 0) {
+      cerr << "ERROR (set selfing): Can't set selfing fraction with "
+              "hermaphrodites population" << endl;
       exit(1);
     }
 
@@ -1577,6 +1567,8 @@ class population : public map<int, subpopulation*> {
         // recombination, gene-conversion, mutation
         crossover_mutation(i, g1, it->first, 2 * p1, 2 * p1 + 1, chr, g, false);
         crossover_mutation(i, g2, it->first, 2 * p2, 2 * p2 + 1, chr, g, false);
+        find(it->first)->second->child_is_male(
+            child_count, gsl_ran_binomial(rng, 0.5, 1) == 1);
 
         migrant_count++;
         child_count++;
@@ -1594,19 +1586,23 @@ class population : public map<int, subpopulation*> {
         p1 = find(
             i)->second->draw_individual_threshold();  // parent 1 from threshold
       } else {
-        p1 = find(i)->second->draw_individual();  // parent 1
+        p1 = find(i)
+                 ->second->draw_individual_by_sex(true);  // parent 1, male role
       }
 
       if (gsl_rng_uniform(rng) < find(i)->second->S) {
         p2 = p1;
       }  // parent 2
       else {
-        p2 = find(i)->second->draw_individual();
+        p2 = find(i)->second->draw_individual_by_sex(
+            false);  // parent 1, female role
       }
+
       crossover_mutation(i, g1, i, 2 * p1, 2 * p1 + 1, chr, g,
                          ((find(i)->second->T > 0) ? true : false));
       crossover_mutation(i, g2, i, 2 * p2, 2 * p2 + 1, chr, g, false);
-
+      find(i)->second->child_is_male(child_count,
+                                     gsl_ran_binomial(rng, 0.5, 1) == 1);
       child_count++;
     }
   }
@@ -1666,7 +1662,7 @@ class population : public map<int, subpopulation*> {
     vector<mutation>::iterator p1_max;
     vector<mutation>::iterator p2;
     vector<mutation>::iterator p2_max;
-
+    // TODO: Refactorize me!
     if (is_threshold == true) {
       p1 = find(j)->second->G_parent_threshold[P1].begin();
       p1_max = find(j)->second->G_parent_threshold[P1].end();
@@ -3256,8 +3252,9 @@ void initialize(population& P, char* file, chromosome& chr, int& t_start,
           get_line(infile, line);
         }
       } else if (line.find("HERMAPHRODITES") != string::npos) {
-        get_line(infile, line);
         parameters.push_back("#HERMAPHRODITES");
+        get_line(infile, line);
+        parameters.push_back(line);
         P.hermaphrodites = translate_hermaphrodite_line(line);
       } else if (line.find("OUTPUT") != string::npos) {
         get_line(infile, line);
