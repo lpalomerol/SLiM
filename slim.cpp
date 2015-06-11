@@ -625,42 +625,23 @@ genome polymorphic(genome& G1, genome& G2) {
 }
 
 class subpopulation {
-  /**
-   * @class subpopulation
-   *  a subpopulation is described by the vector G of 2N genomes
-   *  individual i is constituted by the two genomes 2*i and 2*i+1
-   */
-
- private:
+ protected:
   gsl_ran_discrete_t* LT;
   gsl_ran_discrete_t* LT_TH;
-
  public:
   int N;    /**< population size */
   double S; /**< selfing fraction */
   int T;    /**< threshold ratio */
+
 
   vector<genome> G_parent;
   vector<genome> G_child;
   vector<genome> G_parent_threshold;
 
   map<int, double> m;  // m[i]: fraction made up of migrants from subpopulation
-  // i per generation
+                       // i per generation
 
-  subpopulation(int n) {
-    N = n;
-    S = 0.0;
-    T = 0;
-    G_parent.resize(2 * N);
-    G_child.resize(2 * N);
-
-    double A[N];
-    for (int i = 0; i < N; i++) {
-      A[i] = 1.0;
-    }
-    LT = gsl_ran_discrete_preproc(N, A);
-    LT_TH = gsl_ran_discrete_preproc(N, A);
-  }
+  virtual void set_selfing(double s) = 0;
 
   int draw_individual() { return gsl_ran_discrete(rng, LT); }
 
@@ -670,16 +651,7 @@ class subpopulation {
    * @param chr Chromosome population
    * @return void
    */
-  void update_fitness(chromosome& chr) {
-
-    gsl_ran_discrete_free(LT);
-    int parent_size = (int)(G_parent.size() / 2);
-    double A[parent_size];
-    for (int i = 0; i < parent_size; i++) {
-      A[i] = W(2 * i, 2 * i + 1, chr);
-    }
-    LT = gsl_ran_discrete_preproc(parent_size, A);
-  }
+  virtual void update_fitness(chromosome& chr) = 0;
 
   /**
    * @brief Defines a reproductive subpopulation selecting by a threshold.
@@ -803,6 +775,209 @@ class subpopulation {
 
     return w;
   }
+  virtual void swap() = 0;
+  subpopulation() {};
+  ~subpopulation() {};
+
+  virtual int draw_individual_by_sex(bool male) = 0;
+  virtual void child_is_male(int i, bool male) {}
+  virtual void parent_is_male(int i, bool male) {};
+  virtual bool parent_is_male(int i) = 0;
+};
+
+class subpopulation_sexed : public subpopulation {
+  /**
+   * @class subpopulation_sexed
+   *  a subpopulation is described by the vector G of 2N genomes
+   *  individual i is constituted by the two genomes 2*i and 2*i+1
+   */
+
+ private:
+  gsl_ran_discrete_t* LT_males;
+  gsl_ran_discrete_t* LT_females;
+
+ public:
+  float sex_ratio;
+  vector<genome> G_parent_male;
+  vector<genome> G_parent_female;
+  vector<bool> males_parent;
+  vector<bool> males_child;
+
+  subpopulation_sexed(int n) {
+    N = n;
+    S = 0.0;
+    T = 0;
+
+    sex_ratio = 1.0;
+
+    G_parent.resize(2 * N);
+    G_child.resize(2 * N);
+
+    males_parent.resize(N);
+    males_child.resize(N);
+
+    double All[N];
+    double Males[N];
+    double Females[N];
+    for (int i = 0; i < N; i++) {
+      All[i] = 1.0;
+      males_parent[i] = (gsl_ran_binomial(rng, 0.5, 1) == 1);
+      if (males_parent[i] == true) {
+        Males[i] = 1.0;
+        Females[i] = 0;
+      } else {
+        Males[i] = 0;
+        Females[i] = 1.0;
+      }
+    }
+
+    LT = gsl_ran_discrete_preproc(N, All);
+    LT_TH = gsl_ran_discrete_preproc(N, All);
+    LT_males = gsl_ran_discrete_preproc(N, Males);
+    LT_females = gsl_ran_discrete_preproc(N, Females);
+  }
+
+  void set_selfing(double s) {}
+
+  void child_is_male(int i, bool male) { males_child[i] = male; }
+
+  bool parent_is_male(int i) { return males_parent[i] == true; }
+  void parent_is_male(int i, bool male) { males_parent[i] = male; }
+
+  ~subpopulation_sexed() {
+    G_parent.clear();
+    G_child.clear();
+    G_parent_male.clear();
+    G_parent_female.clear();
+    G_parent_threshold.clear();
+    males_child.clear();
+    males_parent.clear();
+  }
+
+  int draw_individual_by_sex(bool male) {
+    return gsl_ran_discrete(rng, (male == true) ? LT_males : LT_females);
+  }
+
+  int draw_individual_threshold() { return gsl_ran_discrete(rng, LT_TH); }
+  /**
+   * @brief calculate fitnesses in parent population and create new lookup table
+   * @param chr Chromosome population
+   * @return void
+   */
+  void update_fitness(chromosome& chr) {
+
+    gsl_ran_discrete_free(LT);
+    int parent_size = (int)(G_parent.size() / 2);
+    double All[parent_size];
+    double Males[parent_size];
+    double Females[parent_size];
+    for (int i = 0; i < parent_size; i++) {
+      All[i] = W(2 * i, 2 * i + 1, chr);
+      if (males_parent[i] == true) {
+        Males[i] = All[i];
+        Females[i] = 0;
+      } else {
+        Males[i] = 0;
+        Females[i] = All[i];
+      }
+    }
+    LT = gsl_ran_discrete_preproc(parent_size, All);
+    LT_males = gsl_ran_discrete_preproc(parent_size, Males);
+    LT_females = gsl_ran_discrete_preproc(parent_size, Females);
+  }
+
+  /**
+   * @brief Defines a reproductive subpopulation selecting by a threshold.
+   * @param chr Chromosome population
+   * @return void
+   */
+
+  void select_threshold() {
+    int random;
+
+    G_parent_threshold.clear();
+    for (int i = 0; i < T; i++) {
+      random = gsl_rng_uniform_int(rng, G_parent.size() / 2);
+      G_parent_threshold.push_back(G_parent[random]);
+    }
+  }
+
+  void update_threshold_fitness(chromosome& chr) {
+    gsl_ran_discrete_free(LT_TH);
+    int parent_size = (int)(G_parent_threshold.size() / 2);
+    double A[parent_size];
+    for (int i = 0; i < parent_size; i++) {
+      A[i] = W(2 * i, 2 * i + 1, chr);
+    }
+    LT_TH = gsl_ran_discrete_preproc(parent_size, A);
+  }
+
+  void swap() {
+    G_child.swap(G_parent);
+    G_child.resize(2 * N);
+    males_parent.swap(males_child);
+    males_child.resize(N);
+  }
+};
+
+class subpopulation_hermaphrodite : public subpopulation {
+  /**
+   * @class subpopulation_hermaphrodite
+   *  a subpopulation is described by the vector G of 2N genomes
+   *  individual i is constituted by the two genomes 2*i and 2*i+1
+   */
+
+ public:
+  subpopulation_hermaphrodite(int n) {
+    N = n;
+    S = 0.0;
+    T = 0;
+    G_parent.resize(2 * N);
+    G_child.resize(2 * N);
+
+    double A[N];
+    for (int i = 0; i < N; i++) {
+      A[i] = 1.0;
+    }
+    LT = gsl_ran_discrete_preproc(N, A);
+    LT_TH = gsl_ran_discrete_preproc(N, A);
+  }
+
+  void set_selfing(double s) { S = s; }
+
+  bool parent_is_male(int i) { return true; }
+
+  void child_is_male(int i, bool male) {}
+
+  void parent_is_male(int i, bool male) {}
+
+  ~subpopulation_hermaphrodite() {
+    G_parent.clear();
+    G_child.clear();
+    G_parent_threshold.clear();
+  }
+
+  /**
+   * @brief Retrieves an individual taking account the selected sex.
+   *        In case of hermaphrodites is not necessary consider this,
+   *        so is an alias of draw_individual
+   */
+  int draw_individual_by_sex(bool male) { return draw_individual(); }
+  /**
+   * @brief calculate fitnesses in parent population and create new lookup table
+   * @param chr Chromosome population
+   * @return void
+   */
+  void update_fitness(chromosome& chr) {
+
+    gsl_ran_discrete_free(LT);
+    int parent_size = (int)(G_parent.size() / 2);
+    double A[parent_size];
+    for (int i = 0; i < parent_size; i++) {
+      A[i] = W(2 * i, 2 * i + 1, chr);
+    }
+    LT = gsl_ran_discrete_preproc(parent_size, A);
+  }
 
   void swap() {
     G_child.swap(G_parent);
@@ -810,7 +985,7 @@ class subpopulation {
   }
 };
 
-class population : public map<int, subpopulation> {
+class population : public map<int, subpopulation*> {
   /**
    * @class population
    * the population is a map of subpopulations
@@ -818,10 +993,12 @@ class population : public map<int, subpopulation> {
 
  public:
   vector<substitution> Substitutions; /**< The population substitutions */
-  map<int, subpopulation>::iterator it;
-
+  map<int, subpopulation*>::iterator it;
   vector<string> parameters;
 
+  int hermaphrodites;
+  int sex_ratio;
+  population() { hermaphrodites = 1; }
   /**
    * @brief add new empty subpopulation i of size N
    * @param i Population identifier
@@ -841,7 +1018,11 @@ class population : public map<int, subpopulation> {
       exit(1);
     }
 
-    insert(pair<int, subpopulation>(i, subpopulation(N)));
+    if (hermaphrodites == 1) {
+      insert(pair<int, subpopulation*>(i, new subpopulation_hermaphrodite(N)));
+    } else {
+      insert(pair<int, subpopulation*>(i, new subpopulation_sexed(N)));
+    }
   }
 
   /**
@@ -871,15 +1052,22 @@ class population : public map<int, subpopulation> {
       exit(1);
     }
 
-    insert(pair<int, subpopulation>(i, subpopulation(N)));
+    if (hermaphrodites == 1) {
+      insert(pair<int, subpopulation*>(i, new subpopulation_hermaphrodite(N)));
+    } else {
+      insert(pair<int, subpopulation*>(i, new subpopulation_sexed(N)));
+    }
 
-    for (int p = 0; p < find(i)->second.N; p++) {
+    for (int p = 0; p < find(i)->second->N; p++) {
       // draw individual from subpopulation j and assign to be a parent in i
 
-      int m = find(j)->second.draw_individual();
+      int m = find(j)->second->draw_individual();
 
-      find(i)->second.G_parent[2 * p] = find(j)->second.G_parent[2 * m];
-      find(i)->second.G_parent[2 * p + 1] = find(j)->second.G_parent[2 * m + 1];
+      find(i)->second->G_parent[2 * p] = find(j)->second->G_parent[2 * m];
+      find(i)->second->G_parent[2 * p + 1] =
+          find(j)->second->G_parent[2 * m + 1];
+      bool male = find(j)->second->parent_is_male(m);
+      find(i)->second->parent_is_male(p, male);
     }
   }
   /**
@@ -899,11 +1087,11 @@ class population : public map<int, subpopulation> {
     {
       erase(i);
       for (it = begin(); it != end(); it++) {
-        it->second.m.erase(i);
+        it->second->m.erase(i);
       }
     } else {
-      find(i)->second.N = N;
-      find(i)->second.G_child.resize(2 * N);
+      find(i)->second->N = N;
+      find(i)->second->G_child.resize(2 * N);
     }
   }
 
@@ -924,7 +1112,13 @@ class population : public map<int, subpopulation> {
       exit(1);
     }
 
-    find(i)->second.S = s;
+    if (hermaphrodites == 0) {
+      cerr << "ERROR (set selfing): Can't set selfing fraction with "
+              "hermaphrodites population" << endl;
+      exit(1);
+    }
+
+    find(i)->second->S = s;
   }
 
   /**
@@ -952,11 +1146,11 @@ class population : public map<int, subpopulation> {
       exit(1);
     }
 
-    if (find(destination)->second.m.count(source) != 0) {
-      find(destination)->second.m.erase(source);
+    if (find(destination)->second->m.count(source) != 0) {
+      find(destination)->second->m.erase(source);
     }
 
-    find(destination)->second.m.insert(pair<int, double>(source, ratio));
+    find(destination)->second->m.insert(pair<int, double>(source, ratio));
   }
 
   /**
@@ -979,8 +1173,8 @@ class population : public map<int, subpopulation> {
     }
     // If threshold is greater than population means we want cross all
     // individuals.
-    find(subpopulation)->second.T =
-        (find(subpopulation)->second.N > threshold ? threshold : 0);
+    find(subpopulation)->second->T =
+        (find(subpopulation)->second->N > threshold ? threshold : 0);
   }
 
   /**
@@ -1063,8 +1257,8 @@ class population : public map<int, subpopulation> {
       int subpopulation = atoi(sub1.c_str());
       int threshold = atoi(E.s[1].c_str());
       set_threshold(subpopulation, threshold);
-      find(subpopulation)->second.select_threshold();
-      find(subpopulation)->second.update_threshold_fitness(chr);
+      find(subpopulation)->second->select_threshold();
+      find(subpopulation)->second->update_threshold_fitness(chr);
     }
 
     if (type == 'A')  // output state of entire population
@@ -1143,7 +1337,7 @@ class population : public map<int, subpopulation> {
            << " has not been defined" << endl;
       exit(1);
     }
-    if (find(M.i)->second.G_child.size() / 2 < M.nAA + M.nAa) {
+    if (find(M.i)->second->G_child.size() / 2 < M.nAA + M.nAa) {
       cerr << "ERROR (predetermined mutation): not enough individuals in "
               "subpopulation " << M.i << endl;
       exit(1);
@@ -1160,8 +1354,8 @@ class population : public map<int, subpopulation> {
     // introduce homozygotes
 
     for (int j = 0; j < M.nAA; j++) {
-      genome* g1 = &find(M.i)->second.G_child[2 * j];
-      genome* g2 = &find(M.i)->second.G_child[2 * j + 1];
+      genome* g1 = &find(M.i)->second->G_child[2 * j];
+      genome* g2 = &find(M.i)->second->G_child[2 * j + 1];
       (*g1).push_back(m);
       (*g2).push_back(m);
       sort((*g1).begin(), (*g1).end());
@@ -1173,7 +1367,7 @@ class population : public map<int, subpopulation> {
     // introduce heterozygotes
 
     for (int j = M.nAA; j < M.nAA + M.nAa; j++) {
-      genome* g1 = &find(M.i)->second.G_child[2 * j];
+      genome* g1 = &find(M.i)->second->G_child[2 * j];
       (*g1).push_back(m);
       sort((*g1).begin(), (*g1).end());
       (*g1).erase(unique((*g1).begin(), (*g1).end()), (*g1).end());
@@ -1198,14 +1392,14 @@ class population : public map<int, subpopulation> {
       multimap<int, polymorphism> P;
       multimap<int, polymorphism>::iterator P_it;
 
-      for (int i = 0; i < 2 * it->second.N; i++)  // go through all children
+      for (int i = 0; i < 2 * it->second->N; i++)  // go through all children
       {
-        for (int k = 0; k < it->second.G_child[i].size();
+        for (int k = 0; k < it->second->G_child[i].size();
              k++)  // go through all mutations
         {
           for (int j = 0; j < TM.size(); j++) {
-            if (it->second.G_child[i][k].t == TM[j]) {
-              add_mut(P, it->second.G_child[i][k]);
+            if (it->second->G_child[i][k].t == TM[j]) {
+              add_mut(P, it->second->G_child[i][k]);
             }
           }
         }
@@ -1229,22 +1423,22 @@ class population : public map<int, subpopulation> {
 
       int N = 0;
       for (it = begin(); it != end(); it++) {
-        N += it->second.N;
+        N += it->second->N;
       }
 
       // find all polymorphism that are supposed to undergo partial sweeps
 
       for (it = begin(); it != end(); it++)  // go through all subpopulations
       {
-        for (int i = 0; i < 2 * it->second.N; i++)  // go through all children
+        for (int i = 0; i < 2 * it->second->N; i++)  // go through all children
         {
-          for (int k = 0; k < it->second.G_child[i].size();
+          for (int k = 0; k < it->second->G_child[i].size();
                k++)  // go through all mutations
           {
             for (int j = 0; j < PS.size(); j++) {
-              if (it->second.G_child[i][k].x == PS[j].x &&
-                  it->second.G_child[i][k].t == PS[j].t) {
-                add_mut(P, it->second.G_child[i][k]);
+              if (it->second->G_child[i][k].x == PS[j].x &&
+                  it->second->G_child[i][k].t == PS[j].t) {
+                add_mut(P, it->second->G_child[i][k]);
               }
             }
           }
@@ -1262,15 +1456,15 @@ class population : public map<int, subpopulation> {
               for (it = begin(); it != end();
                    it++)  // go through all subpopulations
               {
-                for (int i = 0; i < 2 * it->second.N;
+                for (int i = 0; i < 2 * it->second->N;
                      i++)  // go through all children
                 {
-                  for (int k = 0; k < it->second.G_child[i].size();
+                  for (int k = 0; k < it->second->G_child[i].size();
                        k++)  // go through all mutations
                   {
-                    if (it->second.G_child[i][k].x == PS[j].x &&
-                        it->second.G_child[i][k].t == PS[j].t) {
-                      it->second.G_child[i][k].s = 0.0;
+                    if (it->second->G_child[i][k].x == PS[j].x &&
+                        it->second->G_child[i][k].t == PS[j].t) {
+                      it->second->G_child[i][k].s = 0.0;
                     }
                   }
                 }
@@ -1308,11 +1502,11 @@ class population : public map<int, subpopulation> {
 
     // create map of shuffled children ids
 
-    int child_map[find(i)->second.N];
-    for (int j = 0; j < find(i)->second.N; j++) {
+    int child_map[find(i)->second->N];
+    for (int j = 0; j < find(i)->second->N; j++) {
       child_map[j] = j;
     }
-    gsl_ran_shuffle(rng, child_map, find(i)->second.N, sizeof(int));
+    gsl_ran_shuffle(rng, child_map, find(i)->second->N, sizeof(int));
 
     int child_count = 0;  // counter over all N children (will get mapped to
     // child_map[child_count])
@@ -1321,14 +1515,14 @@ class population : public map<int, subpopulation> {
 
     map<int, double>::iterator it;
 
-    double m_rates[find(i)->second.m.size() + 1];
-    unsigned int n_migrants[find(i)->second.m.size() + 1];
+    double m_rates[find(i)->second->m.size() + 1];
+    unsigned int n_migrants[find(i)->second->m.size() + 1];
 
     double m_sum = 0.0;
     int pop_count = 0;
 
-    for (map<int, double>::iterator it = find(i)->second.m.begin();
-         it != find(i)->second.m.end(); it++) {
+    for (map<int, double>::iterator it = find(i)->second->m.begin();
+         it != find(i)->second->m.end(); it++) {
       m_rates[pop_count] = it->second;
       m_sum += it->second;
       pop_count++;
@@ -1343,15 +1537,15 @@ class population : public map<int, subpopulation> {
       exit(1);
     }
 
-    gsl_ran_multinomial(rng, find(i)->second.m.size() + 1, find(i)->second.N,
+    gsl_ran_multinomial(rng, find(i)->second->m.size() + 1, find(i)->second->N,
                         m_rates, n_migrants);
 
     // loop over all migration source populations
 
     pop_count = 0;
 
-    for (map<int, double>::iterator it = find(i)->second.m.begin();
-         it != find(i)->second.m.end(); it++) {
+    for (map<int, double>::iterator it = find(i)->second->m.begin();
+         it != find(i)->second->m.end(); it++) {
       int migrant_count = 0;
 
       while (migrant_count < n_migrants[pop_count]) {
@@ -1360,19 +1554,21 @@ class population : public map<int, subpopulation> {
 
         // draw parents in source population
         p1 = gsl_rng_uniform_int(rng,
-                                 find(it->first)->second.G_parent.size() / 2);
+                                 find(it->first)->second->G_parent.size() / 2);
 
         if (gsl_rng_uniform(rng) <
-            find(it->first)->second.S) {  // Check if is at selfing rate
+            find(it->first)->second->S) {  // Check if is at selfing rate
           p2 = p1;
         } else {
-          p2 = gsl_rng_uniform_int(rng,
-                                   find(it->first)->second.G_parent.size() / 2);
+          p2 = gsl_rng_uniform_int(
+              rng, find(it->first)->second->G_parent.size() / 2);
         }
 
         // recombination, gene-conversion, mutation
         crossover_mutation(i, g1, it->first, 2 * p1, 2 * p1 + 1, chr, g, false);
         crossover_mutation(i, g2, it->first, 2 * p2, 2 * p2 + 1, chr, g, false);
+        find(it->first)->second->child_is_male(
+            child_count, gsl_ran_binomial(rng, 0.5, 1) == 1);
 
         migrant_count++;
         child_count++;
@@ -1381,27 +1577,32 @@ class population : public map<int, subpopulation> {
     }
 
     // remainder
-    while (child_count < find(i)->second.N) {
+    while (child_count < find(i)->second->N) {
 
       g1 = 2 * child_map[child_count];      // child genome 1
       g2 = 2 * child_map[child_count] + 1;  // child genome 2
 
-      if (find(i)->second.T > 0) {
-        p1 = find(i)->second.draw_individual_threshold();  // parent 1 from threshold
+      if (find(i)->second->T > 0) {
+        p1 = find(
+            i)->second->draw_individual_threshold();  // parent 1 from threshold
       } else {
-        p1 = find(i)->second.draw_individual();  // parent 1
+        p1 = find(i)
+                 ->second->draw_individual_by_sex(true);  // parent 1, male role
       }
 
-      if (gsl_rng_uniform(rng) < find(i)->second.S) {
+      if (gsl_rng_uniform(rng) < find(i)->second->S) {
         p2 = p1;
       }  // parent 2
       else {
-        p2 = find(i)->second.draw_individual();
+        p2 = find(i)->second->draw_individual_by_sex(
+            false);  // parent 1, female role
       }
-      crossover_mutation(i, g1, i, 2 * p1, 2 * p1 + 1, chr, g,
-                         ((find(i)->second.T > 0) ? true : false));
-      crossover_mutation(i, g2, i, 2 * p2, 2 * p2 + 1, chr, g, false);
 
+      crossover_mutation(i, g1, i, 2 * p1, 2 * p1 + 1, chr, g,
+                         ((find(i)->second->T > 0) ? true : false));
+      crossover_mutation(i, g2, i, 2 * p2, 2 * p2 + 1, chr, g, false);
+      find(i)->second->child_is_male(child_count,
+                                     gsl_ran_binomial(rng, 0.5, 1) == 1);
       child_count++;
     }
   }
@@ -1439,7 +1640,7 @@ class population : public map<int, subpopulation> {
       P2 = swap;
     }  // swap p1 and p2 only without threshold.
 
-    find(i)->second.G_child[c].clear();
+    find(i)->second->G_child[c].clear();
 
     // create vector with the mutations to be added
 
@@ -1461,18 +1662,18 @@ class population : public map<int, subpopulation> {
     vector<mutation>::iterator p1_max;
     vector<mutation>::iterator p2;
     vector<mutation>::iterator p2_max;
-
+    // TODO: Refactorize me!
     if (is_threshold == true) {
-      p1 = find(j)->second.G_parent_threshold[P1].begin();
-      p1_max = find(j)->second.G_parent_threshold[P1].end();
-      p2 = find(j)->second.G_parent_threshold[P2].begin();
-      p2_max = find(j)->second.G_parent_threshold[P2].end();
+      p1 = find(j)->second->G_parent_threshold[P1].begin();
+      p1_max = find(j)->second->G_parent_threshold[P1].end();
+      p2 = find(j)->second->G_parent_threshold[P2].begin();
+      p2_max = find(j)->second->G_parent_threshold[P2].end();
 
     } else {
-      p1 = find(j)->second.G_parent[P1].begin();
-      p1_max = find(j)->second.G_parent[P1].end();
-      p2 = find(j)->second.G_parent[P2].begin();
-      p2_max = find(j)->second.G_parent[P2].end();
+      p1 = find(j)->second->G_parent[P1].begin();
+      p1_max = find(j)->second->G_parent[P1].end();
+      p2 = find(j)->second->G_parent[P2].begin();
+      p2_max = find(j)->second->G_parent[P2].end();
     }
 
     vector<mutation>::iterator m = M.begin();
@@ -1492,11 +1693,11 @@ class population : public map<int, subpopulation> {
         while (p != p_max && (*p).x < R[r] &&
                (m == m_max || (*p).x <= (*m).x)) {
           present = 0;
-          if (n != 0 && find(i)->second.G_child[c].back().x == (*p).x) {
+          if (n != 0 && find(i)->second->G_child[c].back().x == (*p).x) {
             int k = n - 1;
 
             while (present == 0 && k >= 0) {
-              if (find(i)->second.G_child[c][k] == (*p)) {
+              if (find(i)->second->G_child[c][k] == (*p)) {
                 present = 1;
               }
               k--;
@@ -1504,7 +1705,7 @@ class population : public map<int, subpopulation> {
           }
 
           if (present == 0) {
-            find(i)->second.G_child[c].push_back(*p);
+            find(i)->second->G_child[c].push_back(*p);
             n++;
           }
           p++;
@@ -1512,17 +1713,17 @@ class population : public map<int, subpopulation> {
         while (m != m_max && (*m).x < R[r] &&
                (p == p_max || (*m).x <= (*p).x)) {
           present = 0;
-          if (n != 0 && find(i)->second.G_child[c].back().x == (*m).x) {
+          if (n != 0 && find(i)->second->G_child[c].back().x == (*m).x) {
             int k = n - 1;
             while (present == 0 && k >= 0) {
-              if (find(i)->second.G_child[c][k] == (*m)) {
+              if (find(i)->second->G_child[c][k] == (*m)) {
                 present = 1;
               }
               k--;
             }
           }
           if (present == 0) {
-            find(i)->second.G_child[c].push_back(*m);
+            find(i)->second->G_child[c].push_back(*m);
             n++;
           }
           m++;
@@ -1557,11 +1758,11 @@ class population : public map<int, subpopulation> {
     // make children the new parents and update fitnesses
 
     for (it = begin(); it != end(); it++) {
-      it->second.swap();
-      it->second.update_fitness(chr);
-      if (it->second.T > 0) {
-        it->second.select_threshold();
-        it->second.update_threshold_fitness(chr);
+      it->second->swap();
+      it->second->update_fitness(chr);
+      if (it->second->T > 0) {
+        it->second->select_threshold();
+        it->second->update_threshold_fitness(chr);
       }
     }
   }
@@ -1574,22 +1775,22 @@ class population : public map<int, subpopulation> {
    */
   void remove_fixed(int g) {
 
-    genome G = begin()->second.G_child[0];
+    genome G = begin()->second->G_child[0];
 
     for (it = begin(); it != end(); it++)  // subpopulations
     {
-      for (int i = 0; i < 2 * it->second.N; i++)  // child genomes
+      for (int i = 0; i < 2 * it->second->N; i++)  // child genomes
       {
-        G = fixed(it->second.G_child[i], G);
+        G = fixed(it->second->G_child[i], G);
       }
     }
 
     if (G.size() > 0) {
       for (it = begin(); it != end(); it++)  // subpopulations
       {
-        for (int i = 0; i < 2 * it->second.N; i++)  // child genomes
+        for (int i = 0; i < 2 * it->second->N; i++)  // child genomes
         {
-          it->second.G_child[i] = polymorphic(it->second.G_child[i], G);
+          it->second->G_child[i] = polymorphic(it->second->G_child[i], G);
         }
       }
       for (int i = 0; i < G.size(); i++) {
@@ -1606,7 +1807,7 @@ class population : public map<int, subpopulation> {
 
     cout << "Populations:" << endl;
     for (it = begin(); it != end(); it++) {
-      cout << "p" << it->first << " " << it->second.N << endl;
+      cout << "p" << it->first << " " << it->second->N << endl;
     }
 
     multimap<int, polymorphism> P;
@@ -1616,12 +1817,12 @@ class population : public map<int, subpopulation> {
 
     for (it = begin(); it != end(); it++)  // go through all subpopulations
     {
-      for (int i = 0; i < 2 * it->second.N; i++)  // go through all children
+      for (int i = 0; i < 2 * it->second->N; i++)  // go through all children
       {
-        for (int k = 0; k < it->second.G_child[i].size();
+        for (int k = 0; k < it->second->G_child[i].size();
              k++)  // go through all mutations
         {
-          add_mut(P, it->second.G_child[i][k]);
+          add_mut(P, it->second->G_child[i][k]);
         }
       }
     }
@@ -1638,14 +1839,14 @@ class population : public map<int, subpopulation> {
 
     for (it = begin(); it != end(); it++)  // go through all subpopulations
     {
-      for (int i = 0; i < 2 * it->second.N; i++)  // go through all children
+      for (int i = 0; i < 2 * it->second->N; i++)  // go through all children
       {
         cout << "p" << it->first << ":" << i + 1;
 
-        for (int k = 0; k < it->second.G_child[i].size();
+        for (int k = 0; k < it->second->G_child[i].size();
              k++)  // go through all mutations
         {
-          int id = find_mut(P, it->second.G_child[i][k]);
+          int id = find_mut(P, it->second->G_child[i][k]);
           cout << " " << id;
         }
         cout << endl;
@@ -1663,7 +1864,7 @@ class population : public map<int, subpopulation> {
 
     outfile << "Populations:" << endl;
     for (it = begin(); it != end(); it++) {
-      outfile << "p" << it->first << " " << it->second.N << endl;
+      outfile << "p" << it->first << " " << it->second->N << endl;
     }
 
     multimap<int, polymorphism> P;
@@ -1673,12 +1874,12 @@ class population : public map<int, subpopulation> {
 
     for (it = begin(); it != end(); it++)  // go through all subpopulations
     {
-      for (int i = 0; i < 2 * it->second.N; i++)  // go through all children
+      for (int i = 0; i < 2 * it->second->N; i++)  // go through all children
       {
-        for (int k = 0; k < it->second.G_child[i].size();
+        for (int k = 0; k < it->second->G_child[i].size();
              k++)  // go through all mutations
         {
-          add_mut(P, it->second.G_child[i][k]);
+          add_mut(P, it->second->G_child[i][k]);
         }
       }
     }
@@ -1695,14 +1896,14 @@ class population : public map<int, subpopulation> {
 
     for (it = begin(); it != end(); it++)  // go through all subpopulations
     {
-      for (int i = 0; i < 2 * it->second.N; i++)  // go through all children
+      for (int i = 0; i < 2 * it->second->N; i++)  // go through all children
       {
         outfile << "p" << it->first << ":" << i + 1;
 
-        for (int k = 0; k < it->second.G_child[i].size();
+        for (int k = 0; k < it->second->G_child[i].size();
              k++)  // go through all mutations
         {
-          int id = find_mut(P, it->second.G_child[i][k]);
+          int id = find_mut(P, it->second->G_child[i][k]);
           outfile << " " << id;
         }
         outfile << endl;
@@ -1731,13 +1932,13 @@ class population : public map<int, subpopulation> {
     multimap<int, polymorphism>::iterator P_it;
 
     for (int s = 0; s < n; s++) {
-      int j = gsl_rng_uniform_int(rng, find(i)->second.G_child.size());
+      int j = gsl_rng_uniform_int(rng, find(i)->second->G_child.size());
       sample.push_back(j);
 
-      for (int k = 0; k < find(i)->second.G_child[j].size();
+      for (int k = 0; k < find(i)->second->G_child[j].size();
            k++)  // go through all mutations
       {
-        add_mut(P, find(i)->second.G_child[j][k]);
+        add_mut(P, find(i)->second->G_child[j][k]);
       }
     }
 
@@ -1755,10 +1956,10 @@ class population : public map<int, subpopulation> {
     {
       cout << "p" << find(i)->first << ":" << sample[j] + 1;
 
-      for (int k = 0; k < find(i)->second.G_child[sample[j]].size();
+      for (int k = 0; k < find(i)->second->G_child[sample[j]].size();
            k++)  // go through all mutations
       {
-        int id = find_mut(P, find(i)->second.G_child[sample[j]][k]);
+        int id = find_mut(P, find(i)->second->G_child[sample[j]][k]);
         cout << " " << id;
       }
       cout << endl;
@@ -1785,13 +1986,13 @@ class population : public map<int, subpopulation> {
     multimap<int, polymorphism>::iterator P_it;
 
     for (int s = 0; s < n; s++) {
-      int j = gsl_rng_uniform_int(rng, find(i)->second.G_child.size());
+      int j = gsl_rng_uniform_int(rng, find(i)->second->G_child.size());
       sample.push_back(j);
 
-      for (int k = 0; k < find(i)->second.G_child[j].size();
+      for (int k = 0; k < find(i)->second->G_child[j].size();
            k++)  // go through all mutations
       {
-        add_mut(P, find(i)->second.G_child[j][k]);
+        add_mut(P, find(i)->second->G_child[j][k]);
       }
     }
 
@@ -1816,11 +2017,11 @@ class population : public map<int, subpopulation> {
     {
       string genotype(P.size(), '0');
 
-      for (int k = 0; k < find(i)->second.G_child[sample[j]].size();
+      for (int k = 0; k < find(i)->second->G_child[sample[j]].size();
            k++)  // go through all mutations
       {
         int pos = 0;
-        mutation m = find(i)->second.G_child[sample[j]][k];
+        mutation m = find(i)->second->G_child[sample[j]][k];
 
         for (P_it = P.begin(); P_it != P.end(); P_it++) {
           if (P_it->first == m.x && P_it->second.t == m.t &&
@@ -2629,6 +2830,28 @@ void check_input_file(char* file) {
           }
           get_line(infile, line);
         }
+      } else if (line.find("HERMAPHRODITES") != string::npos) {
+        get_line(infile, line);
+        while (line.find('#') == string::npos && !infile.eof()) {
+          if (line.length() > 0) {
+            int good = 1;
+
+            istringstream iss(line);
+            iss >> sub;
+            if (sub.find_first_not_of("10") != string::npos) {
+              good = 0;
+            }
+            if (!iss.eof()) {
+              good = 0;
+            }
+
+            if (good == 0) {
+              input_error(10, line);
+            }
+          }
+          get_line(infile, line);
+        }
+
       } else if (line.find("PREDETERMINED MUTATIONS") != string::npos) {
         get_line(infile, line);
         while (line.find('#') == string::npos && !infile.eof()) {
@@ -2810,13 +3033,13 @@ void initialize_from_file(population& P, const char* file, chromosome& chr) {
 
     while (iss >> sub) {
       int id = atoi(sub.c_str());
-      P.find(p)->second.G_parent[i - 1].push_back(M.find(id)->second);
+      P.find(p)->second->G_parent[i - 1].push_back(M.find(id)->second);
     }
     get_line(infile, line);
   }
 
   for (P.it = P.begin(); P.it != P.end(); P.it++) {
-    P.it->second.update_fitness(chr);
+    P.it->second->update_fitness(chr);
   }
 };
 
@@ -2828,6 +3051,8 @@ void initialize(population& P, char* file, chromosome& chr, int& t_start,
   string sub;
   vector<int> subpopulations;
   ifstream infile(file);
+
+  int hermaphrodites = 1;
 
   long pid = getpid();
   time_t* tp, t;
@@ -3026,6 +3251,11 @@ void initialize(population& P, char* file, chromosome& chr, int& t_start,
           }
           get_line(infile, line);
         }
+      } else if (line.find("HERMAPHRODITES") != string::npos) {
+        parameters.push_back("#HERMAPHRODITES");
+        get_line(infile, line);
+        parameters.push_back(line);
+        P.hermaphrodites = translate_hermaphrodite_line(line);
       } else if (line.find("OUTPUT") != string::npos) {
         get_line(infile, line);
         parameters.push_back("#OUTPUT");
@@ -3159,7 +3389,7 @@ int main(int argc, char* argv[]) {
   chromosome chr;
 
   population P;
-  map<int, subpopulation>::iterator itP;
+  map<int, subpopulation*>::iterator itP;
 
   P.parameters.push_back("#INPUT PARAMETER FILE");
   P.parameters.push_back(input_file);
@@ -3238,4 +3468,5 @@ int main(int argc, char* argv[]) {
 
     P.swap_generations(g, chr);
   }
+  return 0;
 }
