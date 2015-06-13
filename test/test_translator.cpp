@@ -32,3 +32,4 @@ TEST(translate_hermaphrodite_line_test, valid_line_1_comment){
 	hermaph = translate_hermaphrodite_line("1 / I am a comment");
 	EXPECT_EQ(1, hermaph);
 }
+

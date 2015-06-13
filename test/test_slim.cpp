@@ -1,14 +1,30 @@
 #include "gtest/gtest.h"
 #include "../slim.cpp"
 
-TEST(test_chromosome_validation, should_crash_when_empty) {
+class slim_test : public ::testing::Test {
+
+ protected:
+  static void SetUpTestCase() {
+    rng = gsl_rng_alloc(gsl_rng_taus2);
+    gsl_rng_set(rng, (long)12345);
+  }
+};
+
+typedef slim_test test_chromosome_validation;
+typedef slim_test test_population_set_threshold;
+typedef slim_test no_hermaphrodites;
+typedef slim_test set_sex_ratio;
+typedef slim_test get_reproductive_females;
+typedef slim_test update_threshold_fitness;
+
+TEST_F(test_chromosome_validation, should_crash_when_empty) {
   chromosome chr;
   vector<int> subpopulations;
 
   ASSERT_DEATH(chr.validate(subpopulations), "empty chromosome");
 }
 
-TEST(test_chromosome_validation, should_crash_when_rec_r_empty) {
+TEST_F(test_chromosome_validation, should_crash_when_rec_r_empty) {
   chromosome chr;
   vector<int> subpopulations;
 
@@ -17,7 +33,7 @@ TEST(test_chromosome_validation, should_crash_when_rec_r_empty) {
                "recombination rate not specified");
 }
 
-TEST(test_chromosome_validation, sould_crash_when_invalid_mutation_rate) {
+TEST_F(test_chromosome_validation, sould_crash_when_invalid_mutation_rate) {
   chromosome chr;
   vector<int> subpopulations;
   chr.push_back(genomic_element(1, 1, 1));
@@ -26,8 +42,8 @@ TEST(test_chromosome_validation, sould_crash_when_invalid_mutation_rate) {
   ASSERT_DEATH(chr.validate(subpopulations), "mutation rate");
 }
 
-TEST(test_chromosome_validation,
-     should_pass_when_all_genomic_elements_are_default) {
+TEST_F(test_chromosome_validation,
+       should_pass_when_all_genomic_elements_are_default) {
   chromosome chr;
   vector<int> subpopulations;
   chr.push_back(genomic_element(1, 1, 1));
@@ -58,8 +74,8 @@ TEST(test_chromosome_validation,
   ASSERT_DEATH(chr.validate(subpopulations), "mutation type");
 }
 
-TEST(test_chromosome_validation,
-     should_pass_when_all_genomic_elements_are_custom) {
+TEST_F(test_chromosome_validation,
+       should_pass_when_all_genomic_elements_are_custom) {
   chromosome chr;
   vector<int> subpopulations;
   chr.push_back(genomic_element(1, 1, 1));
@@ -110,7 +126,8 @@ TEST(test_chromosome_validation,
   ASSERT_DEATH(chr.validate(subpopulations), "mutation type");
 }
 
-TEST(test_chromosome_validation, should_pass_when_one_is_custom_other_default) {
+TEST_F(test_chromosome_validation,
+       should_pass_when_one_is_custom_other_default) {
   chromosome chr;
   vector<int> subpopulations;
   chr.push_back(genomic_element(1, 1, 1));
@@ -152,8 +169,8 @@ TEST(test_chromosome_validation, should_pass_when_one_is_custom_other_default) {
   ASSERT_DEATH(chr.validate(subpopulations), "mutation type");
 }
 
-TEST(test_chromosome_validation,
-     should_fail_pass_when_one_is_custom_other_not_exists) {
+TEST_F(test_chromosome_validation,
+       should_fail_pass_when_one_is_custom_other_not_exists) {
   chromosome chr;
   vector<int> subpopulations;
   chr.push_back(genomic_element(1, 1, 1));
@@ -185,65 +202,52 @@ TEST(test_chromosome_validation,
   ASSERT_DEATH(chr.validate(subpopulations), "2,1) not defined");
 }
 
-TEST(test_population_set_threshold, should_fail_with_invalid_population) {
+TEST_F(test_population_set_threshold, should_fail_with_invalid_population) {
   population pop;
   ASSERT_DEATH(pop.set_threshold(0, 10), "no subpopulation source 0");
 }
 
-TEST(test_population_set_threshold, should_fail_with_negative_threshold) {
+TEST_F(test_population_set_threshold, should_fail_with_negative_threshold) {
   population pop;
   pop.add_subpopulation(1, 100);
   ASSERT_DEATH(pop.set_threshold(1, -1),
                "migration threshold has to be equal or greater than 1");
 }
 
-TEST(test_population_set_threshold, should_disable_threshold_when_0) {
+TEST_F(test_population_set_threshold, should_disable_threshold_when_0) {
   population pop;
   pop.add_subpopulation(1, 100);
   pop.set_threshold(1, 0);
   EXPECT_EQ(0, pop.find(1)->second->T);
 }
 
-TEST(test_population_set_threshold,
-     should_update_threshold_when_lower_than_pop_number) {
+TEST_F(test_population_set_threshold,
+       should_update_threshold_when_lower_than_pop_number) {
   population pop;
   pop.add_subpopulation(1, 100);
   pop.set_threshold(1, 50);
   EXPECT_EQ(50, pop.find(1)->second->T);
 }
 
-TEST(test_population_set_threshold,
-     should_disable_threshold_when_greater_than_pop) {
+TEST_F(test_population_set_threshold,
+       should_disable_threshold_when_greater_than_pop) {
   population pop;
   pop.add_subpopulation(1, 100);
   pop.set_threshold(1, 200);
   EXPECT_EQ(0, pop.find(1)->second->T);
 }
 
-TEST(test_select_threshold, should_define_threshold_genome_when_defined) {
-  chromosome chr;
-  population pop;
-  pop.add_subpopulation(1, 1000);
-  pop.find(1)->second->update_fitness(chr);
-  pop.find(1)->second->T = 500;
-
-  rng = gsl_rng_alloc(gsl_rng_taus2);
-
-  pop.find(1)->second->select_threshold();
-  EXPECT_EQ(500, pop.find(1)->second->G_parent_threshold.size());
-}
-
-// TEST(test_select_threshold, should_fail_when_threshold_is_0);
-
 // Selfing definition tests
-TEST(no_hermaphrodites, should_define_selfing_with_hermaprhrodites) {
+TEST_F(no_hermaphrodites, should_define_selfing_with_hermaprhrodites) {
   population pop;
   pop.add_subpopulation(1, 1000);
   pop.set_selfing(1, 0.5);
   EXPECT_EQ(pop.find(1)->second->S, 0.5);
 }
 
-TEST(no_hermaphrodites, should_crash_defining_selfing_with_no_hermaprhrodites) {
+TEST_F(no_hermaphrodites,
+       should_crash_defining_selfing_with_no_hermaprhrodites) {
+
   population pop;
   pop.hermaphrodites = 0;
   pop.add_subpopulation(1, 1000);
@@ -251,7 +255,7 @@ TEST(no_hermaphrodites, should_crash_defining_selfing_with_no_hermaprhrodites) {
 }
 
 ////Adding children tests
-TEST(no_hermaphrodites, should_add_child_defining_sex) {
+TEST_F(no_hermaphrodites, should_add_child_defining_sex) {
   population pop;
   pop.hermaphrodites = 0;
   pop.add_subpopulation(1, 100);
@@ -267,7 +271,7 @@ TEST(no_hermaphrodites, should_add_child_defining_sex) {
   EXPECT_EQ(pop.find(1)->second->parent_is_male(1), true);
 }
 
-TEST(no_hermaphrodites, should_add_individual_from_p2_to_p1_with_sex_fixed) {
+TEST_F(no_hermaphrodites, should_add_individual_from_p2_to_p1_with_sex_fixed) {
   population pop;
   pop.hermaphrodites = 0;
   pop.add_subpopulation(1, 5);
@@ -283,27 +287,234 @@ TEST(no_hermaphrodites, should_add_individual_from_p2_to_p1_with_sex_fixed) {
   }
 }
 
-TEST(no_hermaphrodites, check_draw_individual_by_sex_with_no_hermaprh) {
+TEST_F(no_hermaphrodites, check_draw_individual_by_sex_with_no_hermaprh) {
   population pop;
+  chromosome chrom;
   pop.hermaphrodites = 0;
   pop.add_subpopulation(1, 2);
   pop.find(1)->second->parent_is_male(0, true);
   pop.find(1)->second->parent_is_male(1, false);
-  bool male_id = pop.find(1)->second->draw_individual_by_sex(true);
-  bool female_id = pop.find(1)->second->draw_individual_by_sex(false);
+  pop.find(1)->second->update_fitness(chrom);
+  int male_id = pop.find(1)->second->draw_individual_by_sex(true);
+  int female_id = pop.find(1)->second->draw_individual_by_sex(false);
   EXPECT_EQ(pop.find(1)->second->parent_is_male(male_id), true);
   EXPECT_EQ(pop.find(1)->second->parent_is_male(female_id), false);
 }
 
-TEST(no_hermaphrodites, check_draw_individual_by_sex_with_hermaprh) {
+TEST_F(no_hermaphrodites, check_draw_individual_by_sex_with_hermaprh) {
   population pop;
   pop.hermaphrodites = 1;
   pop.add_subpopulation(1, 2);
-  pop.find(1)->second->parent_is_male(0, true);
-  pop.find(1)->second->parent_is_male(1, false);
-  bool male_id = pop.find(1)->second->draw_individual_by_sex(true);
-  bool female_id = pop.find(1)->second->draw_individual_by_sex(false);
+  pop.find(1)->second->parent_is_male(1, true);
+  pop.find(1)->second->parent_is_male(0, false);
+  int male_id = pop.find(1)->second->draw_individual_by_sex(true);
+  int female_id = pop.find(1)->second->draw_individual_by_sex(false);
   EXPECT_EQ(pop.find(1)->second->parent_is_male(male_id), true);
   // With hermaphrodites, both can be "male"
   EXPECT_EQ(pop.find(1)->second->parent_is_male(female_id), true);
+}
+
+TEST_F(set_sex_ratio, should_crash_when_sex_ratio_hermaprhodites) {
+  population pop;
+  pop.hermaphrodites = 1;
+  pop.add_subpopulation(1, 100);
+  ASSERT_DEATH(pop.set_sex_ratio(1, 0.5), "sex ratio");
+}
+
+TEST_F(set_sex_ratio, should_crash_when_sex_ratio_non_existent_population) {
+  population pop;
+  pop.hermaphrodites = 0;
+  pop.add_subpopulation(1, 100);
+  pop.set_sex_ratio(1, 0.15);
+  EXPECT_EQ(pop.find(1)->second->S_ratio, 0.15);
+}
+
+TEST_F(get_reproductive_females, reproductive_females_tests) {
+
+  /*
+   * 100 individuals, 50 males, no threshold, ratio 1.0 -> 50 reproductive
+   * females
+   */
+  EXPECT_EQ(subpopulation_sexed::get_reproductive_females(100, 50, 0, 1.0), 50);
+
+  /*
+   * 100 individuals, 55 males, no threshold, ratio 1.0 -> 45 reproductive
+   * females
+   */
+  EXPECT_EQ(subpopulation_sexed::get_reproductive_females(100, 55, 0, 1.0), 45);
+
+  /*
+   * 100 individuals, 45 males, no threshold, ratio 1.0 -> 45 reproductive
+   * females
+   */
+  EXPECT_EQ(subpopulation_sexed::get_reproductive_females(100, 45, 0, 1.0), 45);
+
+  /*
+   * 100 indiv, 50 males, 10 males threshold, ratio 1.0 -> 10 reproductive
+   * females
+   */
+  EXPECT_EQ(subpopulation_sexed::get_reproductive_females(100, 50, 10, 1.0),
+            10);
+
+  /*
+   * 100 indiv, 50 males, 10 males threshold, ratio 0.5 -> 20  reproductive
+   * females
+   */
+  EXPECT_EQ(subpopulation_sexed::get_reproductive_females(100, 50, 10, 0.5),
+            20);
+
+  /*
+   * 2 individuals, 1 male, 10 males threshold, ratio 1.0 -> 1 reproductive
+   * female
+   */
+  EXPECT_EQ(subpopulation_sexed::get_reproductive_females(2, 1, 10, 1.0), 1);
+
+  /*
+   * 100 individuals, 1 male, 10 males threshold, ratio 0.5 -> 2 reproductive
+   * females
+   */
+  EXPECT_EQ(subpopulation_sexed::get_reproductive_females(100, 1, 10, 0.5), 2);
+
+  /*
+   * 100 individuals, 50 males, 10 males threshold, ratio 0.25 -> 40
+   * reproductive females
+   */
+  EXPECT_EQ(subpopulation_sexed::get_reproductive_females(100, 50, 10, 0.25),
+            40);
+
+  /*
+   * 100 individuals, 50 males, 10 males threshold, ratio 0.125 -> 50
+   * reproductive females ...
+   *    (by threshold should be 80 but there are not enough females at the
+   * group)
+   */
+  EXPECT_EQ(subpopulation_sexed::get_reproductive_females(100, 50, 10, 0.125),
+            50);
+
+  /*
+   * 110 individuals, 50 males, 10 males threshold, ratio 0.125 -> 60
+   * reproductive females ...
+   *    (by threshold should be 80 but there are not enough females at the
+   * group)
+   */
+  EXPECT_EQ(subpopulation_sexed::get_reproductive_females(110, 50, 10, 0.125),
+            60);
+
+  /*
+   * Without sex ratio (ratio = 0) should be selected all females
+   */
+  EXPECT_EQ(subpopulation_sexed::get_reproductive_females(100, 20, 10, 0), 80);
+
+  /*
+   * Sex ratio can't be greater than 1
+   */
+  ASSERT_DEATH(subpopulation_sexed::get_reproductive_females(100, 50, 10, 1.5),
+               "Invalid sex ratio");
+}
+
+TEST_F(update_threshold_fitness,
+       hermaphrodite_should_make_selectable_threshold_subset) {
+  chromosome chr;
+  population pop;
+  pop.hermaphrodites = 1;
+  pop.add_subpopulation(1, 10);
+
+  pop.find(1)->second->T = 5;
+
+  pop.find(1)->second->update_fitness(chr);
+
+  // Now we will retrieve a lot of males, only 5 can be selected due threshold
+  int selected[10];
+  memset(selected, 0, sizeof(selected));
+
+  for (int j = 0; j < 100; j++) {
+    selected[pop.find(1)->second->draw_individual_by_sex(true)] = 1;
+  }
+  int found = 0;
+  for (int j = 0; j < 10; j++) {
+    if (selected[j] == 1) {
+      found++;
+    }
+  }
+  EXPECT_EQ(found, 5);
+}
+
+TEST_F(update_threshold_fitness,
+       sexed_should_make_selectable_threshold_subset) {
+  chromosome chr;
+  population pop;
+  pop.hermaphrodites = 0;
+  pop.add_subpopulation(1, 10);
+
+  // Force 5 males and 5 females
+  for (int i = 0; i < 10; i++) {
+    pop.find(1)->second->parent_is_male(i, (i < 5) ? true : false);
+  }
+
+  pop.find(1)->second->T = 3;
+
+  pop.find(1)->second->update_fitness(chr);
+
+  // Now we will retrieve a lot of males, only 5 can be selected due threshold
+  int males[10];
+  int females[10];
+  memset(males, 0, sizeof(males));
+  memset(females, 0, sizeof(females));
+  for (int j = 0; j < 100; j++) {
+    males[pop.find(1)->second->draw_individual_by_sex(true)] = 1;
+    females[pop.find(1)->second->draw_individual_by_sex(false)] = 1;
+  }
+  int found_males = 0;
+  int found_females = 0;
+  for (int j = 0; j < 10; j++) {
+    if (males[j] == 1) {
+      found_males++;
+    }
+    if (females[j] == 1) {
+      found_females++;
+    }
+  }
+  EXPECT_EQ(found_males, 3);
+  EXPECT_EQ(found_females, 5);
+}
+
+TEST_F(update_threshold_fitness,
+       sexed_should_make_selectable_threshold_subset_with_ratio) {
+  chromosome chr;
+  population pop;
+  pop.hermaphrodites = 0;
+  pop.add_subpopulation(1, 10);
+
+  // Force 5 males and 5 females
+  for (int i = 0; i < 10; i++) {
+    pop.find(1)->second->parent_is_male(i, (i < 5) ? true : false);
+  }
+
+  pop.find(1)->second->T = 1;
+  pop.find(1)->second->S_ratio = 0.5;
+
+  pop.find(1)->second->update_fitness(chr);
+
+  // Now we will retrieve a lot of males, only 5 can be selected due threshold
+  int males[10];
+  int females[10];
+  memset(males, 0, sizeof(males));
+  memset(females, 0, sizeof(females));
+  for (int j = 0; j < 100; j++) {
+    males[pop.find(1)->second->draw_individual_by_sex(true)] = 1;
+    females[pop.find(1)->second->draw_individual_by_sex(false)] = 1;
+  }
+  int found_males = 0;
+  int found_females = 0;
+  for (int j = 0; j < 10; j++) {
+    if (males[j] == 1) {
+      found_males++;
+    }
+    if (females[j] == 1) {
+      found_females++;
+    }
+  }
+  // Threshold is 1 male and sex_ratio is 2 females per male.
+  EXPECT_EQ(found_males, 1);
+  EXPECT_EQ(found_females, 2);
 }

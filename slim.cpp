@@ -32,6 +32,7 @@
 #include <string>
 #include <sstream>
 #include <unistd.h>
+#include <cstring>
 
 #include "./include/translator.h"
 
@@ -107,7 +108,7 @@ class event {
     s = event_names;
     np = s.size();
 
-    string options = "PNMStRFAT";
+    string options = "PNMStrRFAT";
     if (options.find(t) == string::npos) {
       cerr << "ERROR (initialize): invalid event type \"" << t;
       for (int i = 0; i < np; i++) {
@@ -628,15 +629,16 @@ class subpopulation {
  protected:
   gsl_ran_discrete_t* LT;
   gsl_ran_discrete_t* LT_TH;
- public:
-  int N;    /**< population size */
-  double S; /**< selfing fraction */
-  int T;    /**< threshold ratio */
+  gsl_ran_discrete_t* LT_males;
 
+ public:
+  int N;          /**< population size */
+  double S;       /**< selfing fraction */
+  double S_ratio; /**< sex_ratio fraction */
+  int T;          /**< threshold ratio */
 
   vector<genome> G_parent;
   vector<genome> G_child;
-  vector<genome> G_parent_threshold;
 
   map<int, double> m;  // m[i]: fraction made up of migrants from subpopulation
                        // i per generation
@@ -654,29 +656,29 @@ class subpopulation {
   virtual void update_fitness(chromosome& chr) = 0;
 
   /**
-   * @brief Defines a reproductive subpopulation selecting by a threshold.
-   * @param chr Chromosome population
-   * @return void
+   * @brief updates the fitness of selected males (or acting as male) for
+   * threshold purposes
+   * @param double* List of current fitness for all individuals
+   * @param int number of individuals
    */
-
-  void select_threshold() {
-    int random;
-
-    G_parent_threshold.clear();
-    for (int i = 0; i < T; i++) {
-      random = gsl_rng_uniform_int(rng, G_parent.size() / 2);
-      G_parent_threshold.push_back(G_parent[random]);
+  void update_threshold_fitness(double* All, int parent_size) {
+    if (T > 0) {
+      double Males[parent_size];
+      int n_males = T;
+      memset(Males, 0, sizeof(Males));
+      int j = 0;
+      int male;
+      while (j < n_males) {
+        male = draw_individual_by_sex(true);
+        if (Males[male] == 0) {
+          Males[male] = All[male];
+          j++;
+        }
+      }
+      LT_males = gsl_ran_discrete_preproc(parent_size, Males);
+    } else {
+      LT_males = LT;
     }
-  }
-
-  void update_threshold_fitness(chromosome& chr) {
-    gsl_ran_discrete_free(LT_TH);
-    int parent_size = (int)(G_parent_threshold.size() / 2);
-    double A[parent_size];
-    for (int i = 0; i < parent_size; i++) {
-      A[i] = W(2 * i, 2 * i + 1, chr);
-    }
-    LT_TH = gsl_ran_discrete_preproc(parent_size, A);
   }
 
   /**
@@ -793,22 +795,36 @@ class subpopulation_sexed : public subpopulation {
    */
 
  private:
-  gsl_ran_discrete_t* LT_males;
   gsl_ran_discrete_t* LT_females;
 
  public:
-  float sex_ratio;
-  vector<genome> G_parent_male;
-  vector<genome> G_parent_female;
   vector<bool> males_parent;
   vector<bool> males_child;
+
+  static int get_reproductive_females(int N, int males, int threshold,
+                                      double ratio) {
+    if (ratio < 0 || ratio > 1.0) {
+      cerr << "ERROR (get_reproductive_females): Invalid sex ratio value "
+           << ratio << endl;
+      exit(1);
+    }
+
+    int all_females = N - males;
+    if (ratio == 0) {
+      return all_females;
+    }
+
+    int threshold_males = (threshold == 0) ? males : min(threshold, males);
+    double ratio_females = 1 / ratio;
+    return min(int(threshold_males * ratio_females), all_females);
+  }
 
   subpopulation_sexed(int n) {
     N = n;
     S = 0.0;
     T = 0;
 
-    sex_ratio = 1.0;
+    S_ratio = 0;
 
     G_parent.resize(2 * N);
     G_child.resize(2 * N);
@@ -847,9 +863,6 @@ class subpopulation_sexed : public subpopulation {
   ~subpopulation_sexed() {
     G_parent.clear();
     G_child.clear();
-    G_parent_male.clear();
-    G_parent_female.clear();
-    G_parent_threshold.clear();
     males_child.clear();
     males_parent.clear();
   }
@@ -868,12 +881,14 @@ class subpopulation_sexed : public subpopulation {
 
     gsl_ran_discrete_free(LT);
     int parent_size = (int)(G_parent.size() / 2);
+    int n_males = 0;
     double All[parent_size];
     double Males[parent_size];
     double Females[parent_size];
     for (int i = 0; i < parent_size; i++) {
       All[i] = W(2 * i, 2 * i + 1, chr);
       if (males_parent[i] == true) {
+        n_males++;
         Males[i] = All[i];
         Females[i] = 0;
       } else {
@@ -884,32 +899,31 @@ class subpopulation_sexed : public subpopulation {
     LT = gsl_ran_discrete_preproc(parent_size, All);
     LT_males = gsl_ran_discrete_preproc(parent_size, Males);
     LT_females = gsl_ran_discrete_preproc(parent_size, Females);
-  }
-
-  /**
-   * @brief Defines a reproductive subpopulation selecting by a threshold.
-   * @param chr Chromosome population
-   * @return void
-   */
-
-  void select_threshold() {
-    int random;
-
-    G_parent_threshold.clear();
-    for (int i = 0; i < T; i++) {
-      random = gsl_rng_uniform_int(rng, G_parent.size() / 2);
-      G_parent_threshold.push_back(G_parent[random]);
+    if (T > 0) {
+      update_threshold_fitness(All, parent_size);
+    }
+    if (S_ratio > 0) {
+      update_sex_ratio_fitness(All, parent_size, n_males);
     }
   }
 
-  void update_threshold_fitness(chromosome& chr) {
-    gsl_ran_discrete_free(LT_TH);
-    int parent_size = (int)(G_parent_threshold.size() / 2);
-    double A[parent_size];
-    for (int i = 0; i < parent_size; i++) {
-      A[i] = W(2 * i, 2 * i + 1, chr);
+  void update_sex_ratio_fitness(double* All, int parent_size, int n_males) {
+
+    double Females[parent_size];
+    int n_females =
+        subpopulation_sexed::get_reproductive_females(N, n_males, T, S_ratio);
+    memset(Females, 0, sizeof(Females));
+
+    int j = 0;
+    int female;
+    while (j < n_females) {
+      female = draw_individual_by_sex(false);
+      if (Females[female] == 0) {
+        Females[female] = All[female];
+        j++;
+      }
     }
-    LT_TH = gsl_ran_discrete_preproc(parent_size, A);
+    LT_females = gsl_ran_discrete_preproc(parent_size, Females);
   }
 
   void swap() {
@@ -940,7 +954,7 @@ class subpopulation_hermaphrodite : public subpopulation {
       A[i] = 1.0;
     }
     LT = gsl_ran_discrete_preproc(N, A);
-    LT_TH = gsl_ran_discrete_preproc(N, A);
+    LT_males = LT;
   }
 
   void set_selfing(double s) { S = s; }
@@ -954,7 +968,6 @@ class subpopulation_hermaphrodite : public subpopulation {
   ~subpopulation_hermaphrodite() {
     G_parent.clear();
     G_child.clear();
-    G_parent_threshold.clear();
   }
 
   /**
@@ -962,7 +975,10 @@ class subpopulation_hermaphrodite : public subpopulation {
    *        In case of hermaphrodites is not necessary consider this,
    *        so is an alias of draw_individual
    */
-  int draw_individual_by_sex(bool male) { return draw_individual(); }
+  int draw_individual_by_sex(bool male) {
+    return gsl_ran_discrete(rng, (male == true && T > 0) ? LT_males : LT);
+  }
+
   /**
    * @brief calculate fitnesses in parent population and create new lookup table
    * @param chr Chromosome population
@@ -972,11 +988,13 @@ class subpopulation_hermaphrodite : public subpopulation {
 
     gsl_ran_discrete_free(LT);
     int parent_size = (int)(G_parent.size() / 2);
-    double A[parent_size];
+    double All[parent_size];
     for (int i = 0; i < parent_size; i++) {
-      A[i] = W(2 * i, 2 * i + 1, chr);
+      All[i] = W(2 * i, 2 * i + 1, chr);
     }
-    LT = gsl_ran_discrete_preproc(parent_size, A);
+    LT = gsl_ran_discrete_preproc(parent_size, All);
+
+    update_threshold_fitness(All, parent_size);
   }
 
   void swap() {
@@ -1114,7 +1132,7 @@ class population : public map<int, subpopulation*> {
 
     if (hermaphrodites == 0) {
       cerr << "ERROR (set selfing): Can't set selfing fraction with "
-              "hermaphrodites population" << endl;
+              "no hermaphrodites population" << endl;
       exit(1);
     }
 
@@ -1175,6 +1193,22 @@ class population : public map<int, subpopulation*> {
     // individuals.
     find(subpopulation)->second->T =
         (find(subpopulation)->second->N > threshold ? threshold : 0);
+  }
+
+  /**
+   * Defines the sex threshold of this non-hermaphrodite population
+   * The ratio is the definition of the number of females per reproductive male
+   * Only available for non hremaprhrodites
+   * @param population The subpopulation id
+   * @param ratio The sex ratio
+   */
+  void set_sex_ratio(int subpopulation, double ratio) {
+    if (hermaphrodites == 1) {
+      cerr << "ERROR (set sex_ratio): Can't set sex ratio with "
+              "hermaphrodites population" << endl;
+      exit(1);
+    }
+    find(subpopulation)->second->S_ratio = ratio;
   }
 
   /**
@@ -1257,8 +1291,15 @@ class population : public map<int, subpopulation*> {
       int subpopulation = atoi(sub1.c_str());
       int threshold = atoi(E.s[1].c_str());
       set_threshold(subpopulation, threshold);
-      find(subpopulation)->second->select_threshold();
-      find(subpopulation)->second->update_threshold_fitness(chr);
+    }
+
+    if (type == 'r')  // change sex ratio
+    {
+      string sub1 = E.s[0];
+      sub1.erase(0, 1);
+      int subpopulation = atoi(sub1.c_str());
+      double ratio = atof(sub1.c_str());
+      set_sex_ratio(subpopulation, ratio);
     }
 
     if (type == 'A')  // output state of entire population
@@ -1565,8 +1606,8 @@ class population : public map<int, subpopulation*> {
         }
 
         // recombination, gene-conversion, mutation
-        crossover_mutation(i, g1, it->first, 2 * p1, 2 * p1 + 1, chr, g, false);
-        crossover_mutation(i, g2, it->first, 2 * p2, 2 * p2 + 1, chr, g, false);
+        crossover_mutation(i, g1, it->first, 2 * p1, 2 * p1 + 1, chr, g);
+        crossover_mutation(i, g2, it->first, 2 * p2, 2 * p2 + 1, chr, g);
         find(it->first)->second->child_is_male(
             child_count, gsl_ran_binomial(rng, 0.5, 1) == 1);
 
@@ -1582,13 +1623,8 @@ class population : public map<int, subpopulation*> {
       g1 = 2 * child_map[child_count];      // child genome 1
       g2 = 2 * child_map[child_count] + 1;  // child genome 2
 
-      if (find(i)->second->T > 0) {
-        p1 = find(
-            i)->second->draw_individual_threshold();  // parent 1 from threshold
-      } else {
-        p1 = find(i)
-                 ->second->draw_individual_by_sex(true);  // parent 1, male role
-      }
+      p1 =
+          find(i)->second->draw_individual_by_sex(true);  // parent 1, male role
 
       if (gsl_rng_uniform(rng) < find(i)->second->S) {
         p2 = p1;
@@ -1598,9 +1634,8 @@ class population : public map<int, subpopulation*> {
             false);  // parent 1, female role
       }
 
-      crossover_mutation(i, g1, i, 2 * p1, 2 * p1 + 1, chr, g,
-                         ((find(i)->second->T > 0) ? true : false));
-      crossover_mutation(i, g2, i, 2 * p2, 2 * p2 + 1, chr, g, false);
+      crossover_mutation(i, g1, i, 2 * p1, 2 * p1 + 1, chr, g);
+      crossover_mutation(i, g2, i, 2 * p2, 2 * p2 + 1, chr, g);
       find(i)->second->child_is_male(child_count,
                                      gsl_ran_binomial(rng, 0.5, 1) == 1);
       child_count++;
@@ -1616,7 +1651,6 @@ class population : public map<int, subpopulation*> {
    * @param P2 genome from population 2
    * @param chr Chromosome
    * @param g generation number
-   * @param t Check if parent is from threshold.
    * @return void
    * child genome c in subpopulation i is assigned outcome of cross-overs at
    * breakpoints r
@@ -1633,7 +1667,7 @@ class population : public map<int, subpopulation*> {
    *   This swapping is only done without threshold.
    */
   void crossover_mutation(int i, int c, int j, int P1, int P2, chromosome& chr,
-                          int g, bool is_threshold = false) {
+                          int g) {
     if (gsl_rng_uniform_int(rng, 2) == 0) {
       int swap = P1;
       P1 = P2;
@@ -1663,18 +1697,11 @@ class population : public map<int, subpopulation*> {
     vector<mutation>::iterator p2;
     vector<mutation>::iterator p2_max;
     // TODO: Refactorize me!
-    if (is_threshold == true) {
-      p1 = find(j)->second->G_parent_threshold[P1].begin();
-      p1_max = find(j)->second->G_parent_threshold[P1].end();
-      p2 = find(j)->second->G_parent_threshold[P2].begin();
-      p2_max = find(j)->second->G_parent_threshold[P2].end();
 
-    } else {
-      p1 = find(j)->second->G_parent[P1].begin();
-      p1_max = find(j)->second->G_parent[P1].end();
-      p2 = find(j)->second->G_parent[P2].begin();
-      p2_max = find(j)->second->G_parent[P2].end();
-    }
+    p1 = find(j)->second->G_parent[P1].begin();
+    p1_max = find(j)->second->G_parent[P1].end();
+    p2 = find(j)->second->G_parent[P2].begin();
+    p2_max = find(j)->second->G_parent[P2].end();
 
     vector<mutation>::iterator m = M.begin();
     vector<mutation>::iterator m_max = M.end();
@@ -1760,10 +1787,6 @@ class population : public map<int, subpopulation*> {
     for (it = begin(); it != end(); it++) {
       it->second->swap();
       it->second->update_fitness(chr);
-      if (it->second->T > 0) {
-        it->second->select_threshold();
-        it->second->update_threshold_fitness(chr);
-      }
     }
   }
   /**
@@ -2201,9 +2224,13 @@ void input_error(int type, string line) {
     cerr << "Example:" << endl << endl;
     cerr << "DEMOGRAPHY AND STRUCTURE" << endl;
     cerr << "1 P p1 1000" << endl;
-    cerr << "1 S p1 0.05" << endl;
+    cerr << "1 T p1 500" << endl;
+    cerr << "1 S p1 0.05 /only when hermaphrodites" << endl;
+    cerr << "1 R p1 0.5 /only when no hermaphrodites" << endl;
     cerr << "1000 P p2 100 p1" << endl;
-    cerr << "1000 S p2 0.05" << endl;
+    cerr << "1000 T p1 500" << endl;
+    cerr << "1000 S p2 0.05 /only when hermaphrodites" << endl;
+    cerr << "1000 R p1 0.5 /only when no hermaphrodites" << endl;
     cerr << "2000 N p1 1e4" << endl;
     cerr << "2000 M p2 p1 0.01" << endl << endl;
   } else if (type == 8)  // output
@@ -2578,12 +2605,12 @@ void check_input_file(char* file) {
               good = 0;
             }
             iss >> sub;
-            if (sub.find_first_not_of("PSMNT") != string::npos) {
+            if (sub.find_first_not_of("PSMNTR") != string::npos) {
               good = 0;
             }  // event type
 
             if (sub.compare("P") == 0 ||
-                sub.compare("T"))  // two or three positive integers
+                sub.compare("T") == 0)  // two or three positive integers
             {
               if (iss.eof()) {
                 good = 0;
@@ -2702,6 +2729,27 @@ void check_input_file(char* file) {
               }
               iss >> sub;  // M
               if (sub.find_first_not_of("1234567890.-e") != string::npos) {
+                good = 0;
+              }
+              if (!iss.eof()) {
+                good = 0;
+              }
+            }
+
+            if (sub.compare("R") == 0)  // A double
+            {
+              if (iss.eof()) {
+                good = 0;
+              }
+              iss >> sub;  // p
+              if (sub.compare(0, 1, "p") != 0) {
+                good = 0;
+              }
+              if (iss.eof()) {
+                good = 0;
+              }
+              iss >> sub;  // ratio
+              if (sub.find_first_not_of("1234567890.") != string::npos) {
                 good = 0;
               }
               if (!iss.eof()) {
@@ -3233,10 +3281,13 @@ void initialize(population& P, char* file, chromosome& chr, int& t_start,
             iss >> sub;
             event_type = sub.at(0);
 
+            if (event_type == 'T') {
+              event_type = 't';
+            } else if (event_type == 'R') {
+              event_type = 'r';
+            }
+
             while (iss >> sub) {
-              if (event_type == 'T') {
-                event_type = 't';
-              }
               if (event_type == 'P' &&
                   sub.at(0) == 'p') {  // Add subpopulation to list, wee need to
                                        // keep them for validate genomic
