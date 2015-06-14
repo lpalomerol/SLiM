@@ -35,8 +35,8 @@ g2 2 2 / g2 is length 1 bp
 2 M p1 p2 0.5 /migration and admixture to pop 2
 3 M p2 p1 0.0 /now we cut admixture and see how the mutation evolve in the other population
 3 M p1 p2 0.0 /now we cut admixture and see how the mutation evolve in the other population
-1 S p1 0 /in case sexed populations FORCE this option to zero automatically!
-1 S p2 0 /in case sexed populations FORCE this option to zero automatically!
+/1 S p1 0 /in case sexed populations FORCE this option to zero automatically!
+/1 S p2 0 /in case sexed populations FORCE this option to zero automatically!
 /3 T p1 10 /THRESHOLD only 10 males are used
 /3 T p2 2000 /THRESHOLD too high value, is not used
 3 R p1 0.1 /SEX RATIO sex ratio 0.1 males by 1.0 females at p1
