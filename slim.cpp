@@ -1298,7 +1298,7 @@ class population : public map<int, subpopulation*> {
       string sub1 = E.s[0];
       sub1.erase(0, 1);
       int subpopulation = atoi(sub1.c_str());
-      double ratio = atof(sub1.c_str());
+      double ratio = atof(E.s[1].c_str());
       set_sex_ratio(subpopulation, ratio);
     }
 
