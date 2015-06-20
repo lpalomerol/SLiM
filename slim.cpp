@@ -158,7 +158,7 @@ class mutation_type {
     }
   }
   /**
-   * @brief Returns extra parameter value of this mutaiton type
+   * @brief Returns extra parameter value of this mutation type
    * @return float
    */
   float draw_s() {
@@ -229,6 +229,24 @@ class genomic_element_type {
   }
 
   int draw_mutation_type() { return m[gsl_ran_discrete(rng, LT)]; }
+  /**
+   * @brief Find equivalent mutation between populations.
+   */
+
+  int find_equivalent(int check_m) {
+
+    if (m.size() == 0 ||
+        (std::find(m.begin(), m.end(), check_m) != m.end()) == true) {
+      return check_m;
+    } else if (m.size() == 1) {
+      return m.front();
+    } else {
+      cerr << "ERROR (find_equivalent): Invalid genomic configuration, at \"replacements\" destination genomic element must have 0 or 1 positions"
+           << check_m << endl;
+      exit(1);
+    }
+  }
+
 };
 
 class chromosome : public vector<genomic_element> {
@@ -242,6 +260,7 @@ class chromosome : public vector<genomic_element> {
  public:
   map<int, mutation_type> mutation_types;
   map<pair<int, int>, genomic_element_type> genomic_element_types;
+  map<pair<int, int>, int> cache_equivalency;
   vector<int> rec_x;
   vector<double> rec_r;
 
@@ -1668,6 +1687,7 @@ class population : public map<int, subpopulation*> {
    */
   void crossover_mutation(int i, int c, int j, int P1, int P2, chromosome& chr,
                           int g) {
+
     if (gsl_rng_uniform_int(rng, 2) == 0) {
       int swap = P1;
       P1 = P2;
@@ -1696,7 +1716,6 @@ class population : public map<int, subpopulation*> {
     vector<mutation>::iterator p1_max;
     vector<mutation>::iterator p2;
     vector<mutation>::iterator p2_max;
-    // TODO: Refactorize me!
 
     p1 = find(j)->second->G_parent[P1].begin();
     p1_max = find(j)->second->G_parent[P1].end();
@@ -1713,6 +1732,8 @@ class population : public map<int, subpopulation*> {
     int r_max = R.size();
     int n = 0;
     bool present;
+    int equivalent;
+    pair<int, int> key;
 
     while (r != r_max) {
 
@@ -1720,6 +1741,7 @@ class population : public map<int, subpopulation*> {
         while (p != p_max && (*p).x < R[r] &&
                (m == m_max || (*p).x <= (*m).x)) {
           present = 0;
+
           if (n != 0 && find(i)->second->G_child[c].back().x == (*p).x) {
             int k = n - 1;
 
@@ -1732,7 +1754,32 @@ class population : public map<int, subpopulation*> {
           }
 
           if (present == 0) {
-            find(i)->second->G_child[c].push_back(*p);
+            if (i == j) {  // Default behaviour when NO migration
+              find(i)->second->G_child[c].push_back(*p);
+            } else {  // Only change population ids at migrations.
+              key.first = i;
+              key.second = (*p).x + 1;
+              if (chr.cache_equivalency.find(key) !=
+                  chr.cache_equivalency.end()) {
+                equivalent = chr.cache_equivalency.find(key)->second;
+              } else {
+                equivalent = chr.genomic_element_types.find(key)
+                                 ->second.find_equivalent((*p).t);
+                chr.cache_equivalency.insert(
+                    pair<pair<int, int>, int>(make_pair(key, equivalent)));
+                cout << "Insert!" << endl;
+              }
+
+              if (equivalent != -1 && equivalent != (*p).t) {
+                find(i)->second->G_child[c].push_back(mutation(
+                    equivalent, (*p).x,
+                    chr.mutation_types.find(equivalent)->second.draw_s(),
+                    (*p).i, (*p).g));
+              } else {
+                find(i)->second->G_child[c].push_back(*p);
+              }
+            }
+
             n++;
           }
           p++;
