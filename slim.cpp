@@ -1377,17 +1377,11 @@ class population : public map<int, subpopulation*> {
 
     if (type == 'R')  // output random subpopulation sample
     {
-      string sub = E.s[0];
-      sub.erase(0, 1);
 
-      int i = atoi(sub.c_str());
-      int n = atoi(E.s[1].c_str());
-      cout << "#OUT: " << g << " R p" << i << " " << n << endl;
-
-      if (E.s.size() == 3 && E.s[2] == "MS") {
-        print_sample_ms(i, n, chr);
+      if (E.s.size() % 2 != 0 && (E.s.back() == "MS")) {
+        print_samples_ms(E, g, chr);
       } else {
-        print_sample(i, n, chr);
+        print_samples(E, g, chr);
       }
     }
 
@@ -1999,6 +1993,36 @@ class population : public map<int, subpopulation*> {
     }
   }
 
+  void print_samples(event& E, int g, chromosome& chr) {
+    unsigned int i = 0;
+    int pop;
+    int size;
+
+    while (i < E.s.size()) {
+      pop = atoi(E.s[i].erase(0, 1).c_str());
+      i++;
+      size = atoi(E.s[i].c_str());
+      i++;
+      cout << "#OUT: " << g << " R p" << pop << " " << size << endl;
+      print_sample(pop, size, chr);
+    }
+  }
+  void print_samples_ms(event& E, int g, chromosome& chr) {
+    E.s.pop_back();  // We don't want "MS" value
+    unsigned int i = 0;
+    int pop;
+    int size;
+
+    while (i < E.s.size()) {
+      pop = atoi(E.s[i].erase(0, 1).c_str());
+      i++;
+      size = atoi(E.s[i].c_str());
+      i++;
+      cout << "#OUT: " << g << " R p" << pop << " " << size << endl;
+      print_sample_ms(pop, size, chr);
+    }
+  }
+
   /**
    * @brief print sample of n genomes from subpopulation  i
    * @param i subpopulation to print
@@ -2060,6 +2084,7 @@ class population : public map<int, subpopulation*> {
    * @param chr Chromomsome id
    * @return void
    */
+
   void print_sample_ms(int i, int n, chromosome& chr) {
 
     if (count(i) == 0) {
@@ -2067,7 +2092,6 @@ class population : public map<int, subpopulation*> {
            << endl;
       exit(1);
     }
-
     vector<int> sample;
 
     multimap<int, polymorphism> P;
@@ -2123,6 +2147,7 @@ class population : public map<int, subpopulation*> {
       cout << genotype << endl;
     }
   }
+
   /**
    * @brief find m in P and return its id
    * @param P Population list
@@ -2863,28 +2888,28 @@ void check_input_file(char* file) {
               if (iss.eof()) {
                 good = 0;
               }
-              iss >> sub;  // p1
-              if (sub.compare(0, 1, "p") != 0) {
-                good = 0;
-              }
-              sub.erase(0, 1);
-              if (sub.find_first_not_of("1234567890") != string::npos) {
-                good = 0;
-              }
-              if (iss.eof()) {
-                good = 0;
-              }
-              iss >> sub;  // p2
-              if (sub.find_first_not_of("1234567890") != string::npos) {
-                good = 0;
-              }
-              if (!iss.eof()) {
-                iss >> sub;  // MS
-                if (sub != "MS") {
+
+              iss >> sub;  // param1
+              do {
+                if (sub.compare(0, 1, "p") != 0) {
                   good = 0;
                 }
-              }
-              if (!iss.eof()) {
+                sub.erase(0, 1);
+                if (sub.find_first_not_of("1234567890") != string::npos) {
+                  good = 0;
+                }
+                if (iss.eof()) {
+                  good = 0;
+                }
+                iss >> sub;  // param2
+                if (sub.find_first_not_of("1234567890") != string::npos) {
+                  good = 0;
+                }
+                iss >> sub;  // param1 again (or MS)
+              } while (!iss.eof() && sub != "MS");
+
+              if ((!iss.eof() && (sub != "MS" && sub != "MSX")) ||
+                  (!iss.eof())) {
                 good = 0;
               }
             }
