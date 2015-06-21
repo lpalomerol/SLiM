@@ -241,12 +241,12 @@ class genomic_element_type {
     } else if (m.size() == 1) {
       return m.front();
     } else {
-      cerr << "ERROR (find_equivalent): Invalid genomic configuration, at \"replacements\" destination genomic element must have 0 or 1 positions"
-           << check_m << endl;
+      cerr << "ERROR (find_equivalent): Invalid genomic configuration, at "
+              "\"replacements\" destination genomic element must have 0 or 1 "
+              "positions" << check_m << endl;
       exit(1);
     }
   }
-
 };
 
 class chromosome : public vector<genomic_element> {
@@ -256,11 +256,13 @@ class chromosome : public vector<genomic_element> {
  private:
   gsl_ran_discrete_t* LT_M;  // mutation
   gsl_ran_discrete_t* LT_R;  // recombination
+  pair<int, int> cache_equivalency_key;
+  map<pair<int, int>, int> cache_equivalency;
 
  public:
   map<int, mutation_type> mutation_types;
   map<pair<int, int>, genomic_element_type> genomic_element_types;
-  map<pair<int, int>, int> cache_equivalency;
+
   vector<int> rec_x;
   vector<double> rec_r;
 
@@ -410,6 +412,28 @@ class chromosome : public vector<genomic_element> {
     }
 
     return r;
+  }
+
+  /**
+   * @brief Helping function which searches at equivalencies cache
+   */
+
+  int find_population_equivalent(const int& pop, const int& position,
+                                 const int& type) {
+    cache_equivalency_key.first = pop;
+    cache_equivalency_key.second = position;
+
+    if (cache_equivalency.find(cache_equivalency_key) !=
+        cache_equivalency.end()) {
+      return cache_equivalency.find(cache_equivalency_key)->second;
+    } else {
+      int equivalent;
+      equivalent = genomic_element_types.find(cache_equivalency_key)
+                       ->second.find_equivalent(type);
+      cache_equivalency.insert(pair<pair<int, int>, int>(
+          make_pair(cache_equivalency_key, equivalent)));
+      return equivalent;
+    }
   }
 };
 
@@ -822,7 +846,7 @@ class subpopulation_sexed : public subpopulation {
 
   static int get_reproductive_females(int N, int males, int threshold,
                                       double ratio) {
-    if (ratio < 0 || ratio > 1.0) {
+    if (ratio < 0) {
       cerr << "ERROR (get_reproductive_females): Invalid sex ratio value "
            << ratio << endl;
       exit(1);
@@ -1222,8 +1246,13 @@ class population : public map<int, subpopulation*> {
    * @param ratio The sex ratio
    */
   void set_sex_ratio(int subpopulation, double ratio) {
+    if (count(subpopulation) == 0) {
+      cerr << "ERROR (set_sex_ratio): no subpopulation source " << subpopulation
+           << endl;
+      exit(1);
+    }
     if (hermaphrodites == 1) {
-      cerr << "ERROR (set sex_ratio): Can't set sex ratio with "
+      cerr << "ERROR (setsex_ratio): Can't set sex ratio with "
               "hermaphrodites population" << endl;
       exit(1);
     }
@@ -1757,19 +1786,8 @@ class population : public map<int, subpopulation*> {
             if (i == j) {  // Default behaviour when NO migration
               find(i)->second->G_child[c].push_back(*p);
             } else {  // Only change population ids at migrations.
-              key.first = i;
-              key.second = (*p).x + 1;
-              if (chr.cache_equivalency.find(key) !=
-                  chr.cache_equivalency.end()) {
-                equivalent = chr.cache_equivalency.find(key)->second;
-              } else {
-                equivalent = chr.genomic_element_types.find(key)
-                                 ->second.find_equivalent((*p).t);
-                chr.cache_equivalency.insert(
-                    pair<pair<int, int>, int>(make_pair(key, equivalent)));
-                cout << "Insert!" << endl;
-              }
-
+              equivalent =
+                  chr.find_population_equivalent(i, (*p).x + 1, (*p).t);
               if (equivalent != -1 && equivalent != (*p).t) {
                 find(i)->second->G_child[c].push_back(mutation(
                     equivalent, (*p).x,
@@ -2796,7 +2814,7 @@ void check_input_file(char* file) {
                 good = 0;
               }
               iss >> sub;  // ratio
-              if (sub.find_first_not_of("1234567890.") != string::npos) {
+              if (sub.find_first_not_of("1234567890.-e") != string::npos) {
                 good = 0;
               }
               if (!iss.eof()) {

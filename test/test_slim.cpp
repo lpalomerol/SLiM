@@ -315,6 +315,17 @@ TEST_F(no_hermaphrodites, check_draw_individual_by_sex_with_hermaprh) {
   EXPECT_EQ(pop.find(1)->second->parent_is_male(female_id), true);
 }
 
+TEST_F(set_sex_ratio, should_convert_exponential_string_to_float){
+	//atof tests
+	char test_str[5];
+	strcpy(test_str, "1");
+	EXPECT_EQ(atof(test_str), 1.0);
+	strcpy(test_str, "1e1");
+	EXPECT_EQ(atof(test_str), 10.0);
+	strcpy(test_str, "1e-1");
+	EXPECT_EQ(atof(test_str), 0.1);
+}
+
 TEST_F(set_sex_ratio, should_crash_when_sex_ratio_hermaprhodites) {
   population pop;
   pop.hermaphrodites = 1;
@@ -322,13 +333,22 @@ TEST_F(set_sex_ratio, should_crash_when_sex_ratio_hermaprhodites) {
   ASSERT_DEATH(pop.set_sex_ratio(1, 0.5), "sex ratio");
 }
 
-TEST_F(set_sex_ratio, should_crash_when_sex_ratio_non_existent_population) {
+TEST_F(set_sex_ratio, should_allow_sex_ratio_lower_than_1) {
   population pop;
   pop.hermaphrodites = 0;
   pop.add_subpopulation(1, 100);
   pop.set_sex_ratio(1, 0.15);
   EXPECT_EQ(pop.find(1)->second->S_ratio, 0.15);
 }
+
+TEST_F(set_sex_ratio, should_allow_sex_ratio_greater_than_1) {
+  population pop;
+  pop.hermaphrodites = 0;
+  pop.add_subpopulation(1, 100);
+  pop.set_sex_ratio(1, 1.15);
+  EXPECT_EQ(pop.find(1)->second->S_ratio, 1.15);
+}
+
 
 TEST_F(get_reproductive_females, reproductive_females_tests) {
 
@@ -402,15 +422,30 @@ TEST_F(get_reproductive_females, reproductive_females_tests) {
             60);
 
   /*
-   * Without sex ratio (ratio = 0) should be selected all females
+   * Without sex ratio (ratio = 0) should be selected all females (80)
    */
   EXPECT_EQ(subpopulation_sexed::get_reproductive_females(100, 20, 10, 0), 80);
 
   /*
-   * Sex ratio can't be greater than 1
+   * 100 individuals, 50 males, no threshold (all), ratio 2 -> 25
+   * reproductive females
    */
-  ASSERT_DEATH(subpopulation_sexed::get_reproductive_females(100, 50, 10, 1.5),
-               "Invalid sex ratio");
+  EXPECT_EQ(subpopulation_sexed::get_reproductive_females(100, 50, 0, 2), 25);
+
+  /*
+   * 100 individuals, 50 males, 10 threshold, ratio 2 -> 5 females
+   * reproductive females
+   */
+  EXPECT_EQ(subpopulation_sexed::get_reproductive_females(100, 50, 10, 2), 5);
+
+
+  /*
+   * 100 individuals, 90 males, 50 threshold, ratio 2 -> 10 females (
+   * reproductive females ...
+   *    (not enough females at entire populations limit the number)
+   */
+  EXPECT_EQ(subpopulation_sexed::get_reproductive_females(100, 90, 50, 2), 10);
+
 }
 
 TEST_F(update_threshold_fitness,
