@@ -1,0 +1,43 @@
+/ example01: standard format
+
+#SEED
+123
+
+#MUTATION TYPES  
+m1 0.5 f  0.0 / neutral
+m2 0.5 f  0.1 /positive selection
+
+#MUTATION RATE 
+1e-9 
+
+#GENOMIC ELEMENT TYPES 
+g1 m1 1.0 / only one type comprising the neutral mutations
+g2 m2 1.0 / only one type comprising the selective mutations
+/p1 g1 m1 1.0 /p1 only has neutral mutations
+/p1 g2 m1 1.0 /p1 only has neutral mutations
+/p2 g1 m2 1.0 /p2 only has selective mutations
+/p2 g2 m2 1.0 /p2 only has selective mutations
+
+#CHROMOSOME ORGANIZATION 
+g1 1 1 / g1 is length 1 bp
+g2 2 2 / g2 is length 1 bp
+
+#RECOMBINATION RATE 
+3 2 /free recombination among the two positions
+
+#GENERATIONS 
+1000
+
+#DEMOGRAPHY AND STRUCTURE 
+1 P p1 500 / one population of 500 individuals means 1000 diploid sequences
+1 P p2 500 / one population of 500 individuals means 1000 diploid sequences
+
+#PREDETERMINED MUTATIONS
+1 m1 1 p1 125 250 /p=0.5 in 500 individuals means 250 individuals Aa and 125 AA (A is the mutation)
+1 m2 2 p2 125 250 /p=0.5 in 500 individuals means 250 individuals Aa and 125 AA (A is the mutation)
+
+#OUTPUT 
+500 R p1 10 MS
+500 R p2 10 MS
+1000 R p1 10 MS
+1000 R p2 10 MS
