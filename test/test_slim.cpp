@@ -16,7 +16,7 @@ typedef slim_test no_hermaphrodites;
 typedef slim_test set_sex_ratio;
 typedef slim_test get_reproductive_females;
 typedef slim_test update_threshold_fitness;
-typedef slim_test equiv_genome_test;
+
 
 TEST_F(test_chromosome_validation, should_crash_when_empty) {
   chromosome chr;
@@ -555,31 +555,3 @@ TEST_F(update_threshold_fitness,
   EXPECT_EQ(found_females, 2);
 }
 
-TEST_F(equiv_genome_test, should_return_the_same_id_when_found){
-	vector<int> m;
-	vector<double> g;
-	m.push_back(1);
-	g.push_back(1.0);
-	genomic_element_type origin = genomic_element_type(m,g);
-	EXPECT_EQ(origin.find_equivalent(1), 1);
-}
-
-TEST_F(equiv_genome_test, should_return_the_eixsten_id_when_not_found_and_only_one_ratio_1){
-	vector<int> m;
-	vector<double> g;
-	m.push_back(2);
-	g.push_back(1.0);
-	genomic_element_type origin = genomic_element_type(m,g);
-	EXPECT_EQ(origin.find_equivalent(1), 2);
-}
-
-TEST_F(equiv_genome_test, should_throw_error_when_no_equiv_and_more_than_one_candidate){
-	vector<int> m;
-	vector<double> g;
-	m.push_back(2);
-	g.push_back(.5);
-	m.push_back(3);
-	g.push_back(.5);
-	genomic_element_type origin = genomic_element_type(m,g);
-	ASSERT_DEATH(origin.find_equivalent(1), "Invalid genomic configuration");
-}

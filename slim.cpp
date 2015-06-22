@@ -256,8 +256,6 @@ class chromosome : public vector<genomic_element> {
  private:
   gsl_ran_discrete_t* LT_M;  // mutation
   gsl_ran_discrete_t* LT_R;  // recombination
-  pair<int, int> cache_equivalency_key;
-  map<pair<int, int>, int> cache_equivalency;
 
  public:
   map<int, mutation_type> mutation_types;
@@ -412,28 +410,6 @@ class chromosome : public vector<genomic_element> {
     }
 
     return r;
-  }
-
-  /**
-   * @brief Helping function which searches at equivalencies cache
-   */
-
-  int find_population_equivalent(const int& pop, const int& position,
-                                 const int& type) {
-    cache_equivalency_key.first = pop;
-    cache_equivalency_key.second = position;
-
-    if (cache_equivalency.find(cache_equivalency_key) !=
-        cache_equivalency.end()) {
-      return cache_equivalency.find(cache_equivalency_key)->second;
-    } else {
-      int equivalent;
-      equivalent = genomic_element_types.find(cache_equivalency_key)
-                       ->second.find_equivalent(type);
-      cache_equivalency.insert(pair<pair<int, int>, int>(
-          make_pair(cache_equivalency_key, equivalent)));
-      return equivalent;
-    }
   }
 };
 
@@ -1755,8 +1731,7 @@ class population : public map<int, subpopulation*> {
     int r_max = R.size();
     int n = 0;
     bool present;
-    int equivalent;
-    pair<int, int> key;
+    mutation equivalent;
 
     while (r != r_max) {
 
@@ -1777,19 +1752,14 @@ class population : public map<int, subpopulation*> {
           }
 
           if (present == 0) {
-            if (i == j) {  // Default behaviour when NO migration
+            if (i == j) {  // Default behavior when NO migration
               find(i)->second->G_child[c].push_back(*p);
             } else {  // Only change population ids at migrations.
-              equivalent =
-                  chr.find_population_equivalent(i, (*p).x + 1, (*p).t);
-              if (equivalent != -1 && equivalent != (*p).t) {
-                find(i)->second->G_child[c].push_back(mutation(
-                    equivalent, (*p).x,
-                    chr.mutation_types.find(equivalent)->second.draw_s(),
-                    (*p).i, (*p).g));
-              } else {
-                find(i)->second->G_child[c].push_back(*p);
-              }
+              equivalent = chr.draw_new_mut(i, (*p).x);
+              equivalent.x = (*p).x;
+              equivalent.i = (*p).i;
+              equivalent.g = (*p).g;
+              find(i)->second->G_child[c].push_back(equivalent);
             }
 
             n++;
