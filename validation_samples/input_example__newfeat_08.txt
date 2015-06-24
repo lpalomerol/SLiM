@@ -37,7 +37,7 @@ g2 2 2 / g2 is length 1 bp
 1 m2 2 p2 125 250 /p=0.5 in 500 individuals means 250 individuals Aa and 125 AA (A is the mutation)
 
 #OUTPUT 
-100 R p1 10
-100 R p2 10
-1000 R p1 10
-1000 R p2 10
+100 R p1 10 12345
+100 R p2 10 12345
+1000 R p1 10 12345
+1000 R p2 10 12345

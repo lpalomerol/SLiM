@@ -39,7 +39,7 @@
 using namespace std;
 
 const gsl_rng* rng;
-
+const gsl_rng* rng_samples;
 /**
  * @class mutation
  */
@@ -1354,7 +1354,7 @@ class population : public map<int, subpopulation*> {
     if (type == 'R')  // output random subpopulation sample
     {
 
-      if (E.s.size() % 2 != 0 && (E.s.back() == "MS")) {
+      if (E.s.back() == "MS") {
         print_samples_ms(E, g, chr);
       } else {
         print_samples(E, g, chr);
@@ -1967,28 +1967,45 @@ class population : public map<int, subpopulation*> {
     unsigned int i = 0;
     int pop;
     int size;
+    int seed = atoi(E.s.at(E.s.size() - 2).c_str());
 
-    while (i < E.s.size()) {
+    if (seed != 0) {
+      gsl_rng_set(rng_samples, (long)seed);
+    }
+
+    while (i < E.s.size() - 2) {  // We don't want last two optional fiels
       pop = atoi(E.s[i].erase(0, 1).c_str());
       i++;
       size = atoi(E.s[i].c_str());
       i++;
-      cout << "#OUT: " << g << " R p" << pop << " " << size << endl;
+      cout << "#OUT: " << g << " R p" << pop << " " << size;
+      if (seed > 0) {
+        cout << " seed " << seed;
+      }
+      cout << endl;
       print_sample(pop, size, chr);
     }
   }
   void print_samples_ms(event& E, int g, chromosome& chr) {
-    E.s.pop_back();  // We don't want "MS" value
     unsigned int i = 0;
     int pop;
     int size;
+    int seed = atoi(E.s.at(E.s.size() - 2).c_str());
 
-    while (i < E.s.size()) {
+    if (seed != 0) {
+      gsl_rng_set(rng_samples, (long)seed);
+    }
+
+    while (i < E.s.size() - 2) {  // We don't want last 2 optional fields
       pop = atoi(E.s[i].erase(0, 1).c_str());
       i++;
       size = atoi(E.s[i].c_str());
       i++;
-      cout << "#OUT: " << g << " R p" << pop << " " << size << endl;
+      cout << "#OUT: " << g << " R p" << pop << " " << size;
+      if (seed > 0) {
+        cout << " seed " << seed;
+      }
+      cout << endl;
       print_sample_ms(pop, size, chr);
     }
   }
@@ -2014,7 +2031,7 @@ class population : public map<int, subpopulation*> {
     multimap<int, polymorphism>::iterator P_it;
 
     for (int s = 0; s < n; s++) {
-      int j = gsl_rng_uniform_int(rng, find(i)->second->G_child.size());
+      int j = gsl_rng_uniform_int(rng_samples, find(i)->second->G_child.size());
       sample.push_back(j);
 
       for (int k = 0; k < find(i)->second->G_child[j].size();
@@ -2068,7 +2085,7 @@ class population : public map<int, subpopulation*> {
     multimap<int, polymorphism>::iterator P_it;
 
     for (int s = 0; s < n; s++) {
-      int j = gsl_rng_uniform_int(rng, find(i)->second->G_child.size());
+      int j = gsl_rng_uniform_int(rng_samples, find(i)->second->G_child.size());
       sample.push_back(j);
 
       for (int k = 0; k < find(i)->second->G_child[j].size();
@@ -2304,7 +2321,13 @@ void input_error(int type, string line) {
     cerr << "OUTPUT" << endl;
     cerr << "2000 A outfile" << endl;
     cerr << "1000 R p1 10" << endl;
+    cerr << "1000 R p1 10 p2 10" << endl;
     cerr << "1000 R p1 10 MS" << endl;
+    cerr << "1000 R p1 10 p2 10 MS" << endl;
+    cerr << "1000 R p1 10 123456" << endl;
+    cerr << "1000 R p1 10 MS 1234561" << endl;
+    cerr << "1000 R p1 10 p2 10 123456" << endl;
+    cerr << "1000 R p1 10 p2 10 MS 1234561" << endl;
     cerr << "2000 F" << endl;
     cerr << "1 T m3" << endl << endl;
   } else if (type == 9)  // initialization
@@ -2875,11 +2898,19 @@ void check_input_file(char* file) {
                 if (sub.find_first_not_of("1234567890") != string::npos) {
                   good = 0;
                 }
-                iss >> sub;  // param1 again (or MS)
-              } while (!iss.eof() && sub != "MS");
+                iss >> sub;  // param1 again
+              } while (!iss.eof() && sub.compare(0, 1, "p") == 0);
 
-              if ((!iss.eof() && (sub != "MS" && sub != "MSX")) ||
-                  (!iss.eof())) {
+              if (sub == "MS") {  // optional param MS
+                iss >> sub;
+              }
+
+              if (sub.find_first_not_of("1234567890") ==
+                  string::npos) {  // optional param seed
+                iss >> sub;
+              }
+
+              if (!iss.eof()) {
                 good = 0;
               }
             }
@@ -3375,20 +3406,25 @@ void initialize(population& P, char* file, chromosome& chr, int& t_start,
             parameters.push_back(line);
 
             // FORMAT: t event_type event_paramaters
+            if (line.find(" R ") != string::npos) {
+              output_line r_ouptut = translate_R_output(line);
+              O.insert(pair<int, event>(
+                  r_ouptut.time, event(r_ouptut.event, r_ouptut.params)));
+            } else {
+              int t;
+              char c;
+              vector<string> s;
+              istringstream iss(line);
+              iss >> sub;
+              t = (int)atof(sub.c_str());
+              iss >> sub;
+              c = sub.at(0);
 
-            int t;
-            char c;
-            vector<string> s;
-            istringstream iss(line);
-            iss >> sub;
-            t = (int)atof(sub.c_str());
-            iss >> sub;
-            c = sub.at(0);
-
-            while (iss >> sub) {
-              s.push_back(sub.c_str());
+              while (iss >> sub) {
+                s.push_back(sub.c_str());
+              }
+              O.insert(pair<int, event>(t, event(c, s)));
             }
-            O.insert(pair<int, event>(t, event(c, s)));
           }
           get_line(infile, line);
         }
@@ -3465,10 +3501,13 @@ void initialize(population& P, char* file, chromosome& chr, int& t_start,
   chr.validate(subpopulations);
   chr.initialize_rng();
 
-  // initialize rng
+  // initialize rng and sample
 
   rng = gsl_rng_alloc(gsl_rng_taus2);
   gsl_rng_set(rng, (long)seed);
+
+  rng_samples = gsl_rng_alloc(gsl_rng_taus2);
+  gsl_rng_set(rng_samples, (long)seed);
 
   parameters.push_back("#SEED");
   stringstream ss;
