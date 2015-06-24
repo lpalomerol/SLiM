@@ -17,7 +17,6 @@ typedef slim_test set_sex_ratio;
 typedef slim_test get_reproductive_females;
 typedef slim_test update_threshold_fitness;
 
-
 TEST_F(test_chromosome_validation, should_crash_when_empty) {
   chromosome chr;
   vector<int> subpopulations;
@@ -315,15 +314,15 @@ TEST_F(no_hermaphrodites, check_draw_individual_by_sex_with_hermaprh) {
   EXPECT_EQ(pop.find(1)->second->parent_is_male(female_id), true);
 }
 
-TEST_F(set_sex_ratio, should_convert_exponential_string_to_float){
-	//atof tests
-	char test_str[5];
-	strcpy(test_str, "1");
-	EXPECT_EQ(atof(test_str), 1.0);
-	strcpy(test_str, "1e1");
-	EXPECT_EQ(atof(test_str), 10.0);
-	strcpy(test_str, "1e-1");
-	EXPECT_EQ(atof(test_str), 0.1);
+TEST_F(set_sex_ratio, should_convert_exponential_string_to_float) {
+  // atof tests
+  char test_str[5];
+  strcpy(test_str, "1");
+  EXPECT_EQ(atof(test_str), 1.0);
+  strcpy(test_str, "1e1");
+  EXPECT_EQ(atof(test_str), 10.0);
+  strcpy(test_str, "1e-1");
+  EXPECT_EQ(atof(test_str), 0.1);
 }
 
 TEST_F(set_sex_ratio, should_crash_when_sex_ratio_hermaprhodites) {
@@ -349,103 +348,125 @@ TEST_F(set_sex_ratio, should_allow_sex_ratio_greater_than_1) {
   EXPECT_EQ(pop.find(1)->second->S_ratio, 1.15);
 }
 
+int average_reproductive_females(int N, int all_males, int threshold,
+                                 double ratio) {
+  int n = 100000;
+  int females_i;
+  for (int i = 0; i < n; i++) {
+    females_i += subpopulation_sexed::get_reproductive_females(
+        N, all_males, threshold, ratio);
+  }
+  return (int)females_i / n;
+}
+
+bool similar(int real, int expected, int error) {
+  return abs(real - expected) <= error;
+}
 
 TEST_F(get_reproductive_females, reproductive_females_tests) {
+  int real;
+  /*
+   * 100 individuals, 50 males, no threshold, ratio 0 -> 50 reproductive
+   * females, no random
+   */
+  EXPECT_EQ(subpopulation_sexed::get_reproductive_females(100, 50, 0, 0), 50);
 
   /*
    * 100 individuals, 50 males, no threshold, ratio 1.0 -> 50 reproductive
-   * females
+   * females, no random
    */
   EXPECT_EQ(subpopulation_sexed::get_reproductive_females(100, 50, 0, 1.0), 50);
-
   /*
    * 100 individuals, 55 males, no threshold, ratio 1.0 -> 45 reproductive
-   * females
+   * females, no random
    */
   EXPECT_EQ(subpopulation_sexed::get_reproductive_females(100, 55, 0, 1.0), 45);
 
   /*
    * 100 individuals, 45 males, no threshold, ratio 1.0 -> 45 reproductive
-   * females
+   * females, no random
    */
   EXPECT_EQ(subpopulation_sexed::get_reproductive_females(100, 45, 0, 1.0), 45);
 
   /*
    * 100 indiv, 50 males, 10 males threshold, ratio 1.0 -> 10 reproductive
-   * females
+   * females, no random
    */
+
   EXPECT_EQ(subpopulation_sexed::get_reproductive_females(100, 50, 10, 1.0),
             10);
 
   /*
    * 100 indiv, 50 males, 10 males threshold, ratio 0.5 -> 20  reproductive
-   * females
+   * females, random
    */
-  EXPECT_EQ(subpopulation_sexed::get_reproductive_females(100, 50, 10, 0.5),
-            20);
+
+  real = average_reproductive_females(100, 50, 10, 0.5);
+  EXPECT_TRUE(similar(real, 20, 1));
 
   /*
    * 2 individuals, 1 male, 10 males threshold, ratio 1.0 -> 1 reproductive
-   * female
+   * female, no random
    */
   EXPECT_EQ(subpopulation_sexed::get_reproductive_females(2, 1, 10, 1.0), 1);
 
   /*
    * 100 individuals, 1 male, 10 males threshold, ratio 0.5 -> 2 reproductive
-   * females
+   * females, random
    */
-  EXPECT_EQ(subpopulation_sexed::get_reproductive_females(100, 1, 10, 0.5), 2);
+  real = average_reproductive_females(100, 1, 10, 0.5);
+  EXPECT_TRUE(similar(real, 2, 1));
 
   /*
    * 100 individuals, 50 males, 10 males threshold, ratio 0.25 -> 40
-   * reproductive females
+   * reproductive females, random
    */
-  EXPECT_EQ(subpopulation_sexed::get_reproductive_females(100, 50, 10, 0.25),
-            40);
+  real = average_reproductive_females(100, 50, 10, 0.25);
+  EXPECT_TRUE(similar(real, 40, 1));
 
   /*
    * 100 individuals, 50 males, 10 males threshold, ratio 0.125 -> 50
    * reproductive females ...
    *    (by threshold should be 80 but there are not enough females at the
-   * group)
+   * group), no random because are less females than selectable with random
    */
   EXPECT_EQ(subpopulation_sexed::get_reproductive_females(100, 50, 10, 0.125),
             50);
-
   /*
    * 110 individuals, 50 males, 10 males threshold, ratio 0.125 -> 60
    * reproductive females ...
    *    (by threshold should be 80 but there are not enough females at the
-   * group)
+   * group), random
    */
-  EXPECT_EQ(subpopulation_sexed::get_reproductive_females(110, 50, 10, 0.125),
-            60);
+  real = average_reproductive_females(110, 50, 10, 0.125);
+  EXPECT_TRUE(similar(real, 60, 1));
 
   /*
-   * Without sex ratio (ratio = 0) should be selected all females (80)
+   * Without sex ratio (ratio = 0) should be selected all females (80), no
+   * random
    */
   EXPECT_EQ(subpopulation_sexed::get_reproductive_females(100, 20, 10, 0), 80);
 
   /*
    * 100 individuals, 50 males, no threshold (all), ratio 2 -> 25
-   * reproductive females
+   * reproductive females, random
    */
-  EXPECT_EQ(subpopulation_sexed::get_reproductive_females(100, 50, 0, 2), 25);
+  real = average_reproductive_females(100, 50, 0, 2);
+  EXPECT_TRUE(similar(real, 25, 1));
 
   /*
    * 100 individuals, 50 males, 10 threshold, ratio 2 -> 5 females
-   * reproductive females
+   * reproductive females, random
    */
-  EXPECT_EQ(subpopulation_sexed::get_reproductive_females(100, 50, 10, 2), 5);
-
+  real = average_reproductive_females(100, 50, 10, 2);
+  EXPECT_TRUE(similar(real, 5, 1));
 
   /*
    * 100 individuals, 90 males, 50 threshold, ratio 2 -> 10 females (
    * reproductive females ...
-   *    (not enough females at entire populations limit the number)
+   *    (not enough females at entire populations limit the number), no random
    */
   EXPECT_EQ(subpopulation_sexed::get_reproductive_females(100, 90, 50, 2), 10);
-
 }
 
 TEST_F(update_threshold_fitness,
@@ -554,4 +575,3 @@ TEST_F(update_threshold_fitness,
   EXPECT_EQ(found_males, 1);
   EXPECT_EQ(found_females, 2);
 }
-
