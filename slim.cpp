@@ -820,7 +820,7 @@ class subpopulation_sexed : public subpopulation {
   vector<bool> males_parent;
   vector<bool> males_child;
 
-  static int get_reproductive_females(int N, int males, int threshold,
+  static int get_reproductive_females(int N, int all_males, int threshold,
                                       double ratio) {
     if (ratio < 0) {
       cerr << "ERROR (get_reproductive_females): Invalid sex ratio value "
@@ -828,14 +828,15 @@ class subpopulation_sexed : public subpopulation {
       exit(1);
     }
 
-    int all_females = N - males;
+    int all_females = N - all_males;
     if (ratio == 0) {
       return all_females;
     }
 
-    int threshold_males = (threshold == 0) ? males : min(threshold, males);
-    double ratio_females = 1 / ratio;
-    return min(int(threshold_males * ratio_females), all_females);
+    int threshold_males =
+        (threshold == 0) ? all_males : min(threshold, all_males);
+    double p_ratio_females = (1 / ratio) * threshold_males / all_females;
+    return int(gsl_ran_binomial(rng, p_ratio_females, all_females));
   }
 
   subpopulation_sexed(int n) {
