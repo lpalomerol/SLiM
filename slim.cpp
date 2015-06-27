@@ -667,6 +667,8 @@ class subpopulation {
 
   int draw_individual() { return gsl_ran_discrete(rng, LT); }
 
+  virtual int draw_uniformely_by_sex(bool male) = 0;
+
   int draw_individual_threshold() { return gsl_ran_discrete(rng, LT_TH); }
   /**
    * @brief calculate fitnesses in parent population and create new lookup table
@@ -892,6 +894,20 @@ class subpopulation_sexed : public subpopulation {
     return gsl_ran_discrete(rng, (male == true) ? LT_males : LT_females);
   }
 
+  int draw_uniformely_by_sex(bool male) {
+    bool found = false;
+    int candidate;
+    do {
+      candidate = gsl_rng_uniform_int(rng, G_parent.size() / 2);
+      if (parent_is_male(candidate) == male) {  // When looking male both should
+                                                // be true, when looking female
+                                                // both should be female
+        found = true;
+      }
+    } while (!found);
+    return candidate;
+  }
+
   int draw_individual_threshold() { return gsl_ran_discrete(rng, LT_TH); }
   /**
    * @brief calculate fitnesses in parent population and create new lookup table
@@ -998,6 +1014,10 @@ class subpopulation_hermaphrodite : public subpopulation {
    */
   int draw_individual_by_sex(bool male) {
     return gsl_ran_discrete(rng, (male == true && T > 0) ? LT_males : LT);
+  }
+
+  int draw_uniformely_by_sex(bool male) {
+    return gsl_rng_uniform_int(rng, G_parent.size() / 2);
   }
 
   /**
@@ -1614,15 +1634,13 @@ class population : public map<int, subpopulation*> {
         g2 = 2 * child_map[child_count] + 1;  // child genome 2
 
         // draw parents in source population
-        p1 = gsl_rng_uniform_int(rng,
-                                 find(it->first)->second->G_parent.size() / 2);
+        p1 = find(it->first)->second->draw_uniformely_by_sex(true);
 
         if (gsl_rng_uniform(rng) <
             find(it->first)->second->S) {  // Check if is at selfing rate
           p2 = p1;
         } else {
-          p2 = gsl_rng_uniform_int(
-              rng, find(it->first)->second->G_parent.size() / 2);
+          p2 = find(it->first)->second->draw_uniformely_by_sex(false);
         }
 
         // recombination, gene-conversion, mutation
