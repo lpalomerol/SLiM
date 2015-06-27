@@ -361,14 +361,15 @@ class chromosome : public vector<genomic_element> {
 
   mutation draw_new_mut(int pop_id, int g) {
     int ge = gsl_ran_discrete(rng, LT_M);  // genomic element
-    pair<int, int> key;
-    if (genomic_element_types.count(make_pair(pop_id, operator[](ge).i)) > 0) {
-      key = (std::make_pair(pop_id, operator[](ge).i));
-    } else {
-      key = (std::make_pair(0, operator[](ge).i));
+
+    map<pair<int, int>, genomic_element_type>::iterator item =
+        genomic_element_types.find(make_pair(pop_id, operator[](ge).i));
+
+    if (item == genomic_element_types.end()) {
+      item = genomic_element_types.find(make_pair(0, operator[](ge).i));
     }
-    genomic_element_type ge_type =
-        genomic_element_types.find(key)->second;  // genomic element type
+
+    genomic_element_type ge_type = item->second;  // genomic element type
 
     int mut_type_id = ge_type.draw_mutation_type();  // mutation type id
     mutation_type mut_type =
