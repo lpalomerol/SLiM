@@ -682,23 +682,19 @@ class subpopulation {
    * @param int number of individuals
    */
   void update_threshold_fitness(double* All, int parent_size) {
-    if (T > 0) {
-      double Males[parent_size];
-      int n_males = T;
-      memset(Males, 0, sizeof(Males));
-      int j = 0;
-      int male;
-      while (j < n_males) {
-        male = draw_individual_by_sex(true);
-        if (Males[male] == 0) {
-          Males[male] = All[male];
-          j++;
-        }
+    double Males[parent_size];
+    int n_males = T;
+    memset(Males, 0, sizeof(Males));
+    int j = 0;
+    int male;
+    while (j < n_males) {
+      male = draw_individual_by_sex(true);
+      if (Males[male] == 0) {
+        Males[male] = All[male];
+        j++;
       }
-      LT_males = gsl_ran_discrete_preproc(parent_size, Males);
-    } else {
-      LT_males = LT;
     }
+    LT_males = gsl_ran_discrete_preproc(parent_size, Males);
   }
 
   /**
@@ -1030,8 +1026,10 @@ class subpopulation_hermaphrodite : public subpopulation {
       All[i] = W(2 * i, 2 * i + 1, chr);
     }
     LT = gsl_ran_discrete_preproc(parent_size, All);
-
-    update_threshold_fitness(All, parent_size);
+    LT_males = LT;
+    if (T > 0) {
+      update_threshold_fitness(All, parent_size);
+    }
   }
 
   void swap() {
