@@ -222,7 +222,7 @@ class genomic_element_type {
       exit(1);
     }
     double A[m.size()];
-    for (int i = 0; i < m.size(); i++) {
+    for (unsigned int i = 0; i < m.size(); i++) {
       A[i] = g[i];
     }
     LT = gsl_ran_discrete_preproc(G.size(), A);
@@ -297,8 +297,8 @@ class chromosome : public vector<genomic_element> {
       cerr << "ERROR (initialize): invalid mutation rate" << endl;
       exit(1);
     }
-    for (int i = 1; i <= subpopulations.size(); i++) {
-      for (int j = 0; j < size(); j++) {
+    for (unsigned int i = 1; i <= subpopulations.size(); i++) {
+      for (unsigned int j = 0; j < size(); j++) {
         // Here validates that at least exist one default genomic element type.
         pair<int, int> row_default = make_pair(0, operator[](j).i);
         pair<int, int> row_custom_pop = make_pair(i, operator[](j).i);
@@ -316,7 +316,7 @@ class chromosome : public vector<genomic_element> {
     for (map<pair<int, int>, genomic_element_type>::iterator it =
              genomic_element_types.begin();
          it != genomic_element_types.end(); it++) {
-      for (int j = 0; j < it->second.m.size(); j++) {
+      for (unsigned int j = 0; j < it->second.m.size(); j++) {
         if (mutation_types.count(it->second.m[j]) == 0) {
           cerr << "ERROR (initialize): mutation type " << it->second.m[j]
                << " not defined" << endl;
@@ -332,7 +332,7 @@ class chromosome : public vector<genomic_element> {
 
     double A[size()];
     int l = 0;
-    for (int i = 0; i < size(); i++) {
+    for (unsigned int i = 0; i < size(); i++) {
       if (operator[](i).e > L) {
         L = operator[](i).e;
       }
@@ -347,7 +347,7 @@ class chromosome : public vector<genomic_element> {
     double B[rec_r.size()];
     B[0] = rec_r[0] * (double)rec_x[0];
     R += B[0];
-    for (int i = 1; i < rec_r.size(); i++) {
+    for (unsigned int i = 1; i < rec_r.size(); i++) {
       B[i] = rec_r[i] * (double)(rec_x[i] - rec_x[i - 1]);
       R += B[i];
       if (rec_x[i] > L) {
@@ -648,7 +648,6 @@ genome polymorphic(genome& G1, genome& G2) {
 class subpopulation {
  protected:
   gsl_ran_discrete_t* LT;
-  gsl_ran_discrete_t* LT_TH;
   gsl_ran_discrete_t* LT_males;
 
  public:
@@ -669,7 +668,6 @@ class subpopulation {
 
   virtual int draw_uniformely_by_sex(bool male) = 0;
 
-  int draw_individual_threshold() { return gsl_ran_discrete(rng, LT_TH); }
   /**
    * @brief calculate fitnesses in parent population and create new lookup table
    * @param chr Chromosome population
@@ -871,7 +869,6 @@ class subpopulation_sexed : public subpopulation {
     }
 
     LT = gsl_ran_discrete_preproc(N, All);
-    LT_TH = gsl_ran_discrete_preproc(N, All);
     LT_males = gsl_ran_discrete_preproc(N, Males);
     LT_females = gsl_ran_discrete_preproc(N, Females);
   }
@@ -908,7 +905,6 @@ class subpopulation_sexed : public subpopulation {
     return candidate;
   }
 
-  int draw_individual_threshold() { return gsl_ran_discrete(rng, LT_TH); }
   /**
    * @brief calculate fitnesses in parent population and create new lookup table
    * @param chr Chromosome population
