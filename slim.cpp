@@ -681,7 +681,8 @@ class subpopulation {
    * @param double* List of current fitness for all individuals
    * @param int number of individuals
    */
-  void update_threshold_fitness(double* All, int parent_size) {
+  void update_threshold_fitness(double* All) {
+    int parent_size = (int)(G_parent.size() / 2);
     double Males[parent_size];
     int n_males = T;
     memset(Males, 0, sizeof(Males));
@@ -929,15 +930,15 @@ class subpopulation_sexed : public subpopulation {
     LT_males = gsl_ran_discrete_preproc(parent_size, Males);
     LT_females = gsl_ran_discrete_preproc(parent_size, Females);
     if (T > 0) {
-      update_threshold_fitness(All, parent_size);
+      update_threshold_fitness(All);
     }
     if (S_ratio > 0) {
-      update_sex_ratio_fitness(All, parent_size, n_males);
+      update_sex_ratio_fitness(All, n_males);
     }
   }
 
-  void update_sex_ratio_fitness(double* All, int parent_size, int n_males) {
-
+  void update_sex_ratio_fitness(double* All, int n_males) {
+    int parent_size = (int)(G_parent.size() / 2);
     double Females[parent_size];
     int n_females =
         subpopulation_sexed::get_reproductive_females(N, n_males, T, S_ratio);
@@ -1028,7 +1029,7 @@ class subpopulation_hermaphrodite : public subpopulation {
     LT = gsl_ran_discrete_preproc(parent_size, All);
     LT_males = LT;
     if (T > 0) {
-      update_threshold_fitness(All, parent_size);
+      update_threshold_fitness(All);
     }
   }
 
