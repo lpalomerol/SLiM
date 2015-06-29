@@ -934,7 +934,7 @@ class subpopulation_sexed : public subpopulation {
     LT = gsl_ran_discrete_preproc(parent_size, All);
     LT_males = gsl_ran_discrete_preproc(parent_size, Males);
     LT_females = gsl_ran_discrete_preproc(parent_size, Females);
-    if (T > 0) {
+    if (T > 0 && T < n_males) {
       update_threshold_fitness(All);
     }
     if (S_ratio > 0) {
@@ -1033,7 +1033,7 @@ class subpopulation_hermaphrodite : public subpopulation {
     }
     LT = gsl_ran_discrete_preproc(parent_size, All);
     LT_males = LT;
-    if (T > 0) {
+    if (T > 0 && T < parent_size) {
       update_threshold_fitness(All);
     }
   }
