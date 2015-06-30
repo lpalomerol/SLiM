@@ -360,8 +360,9 @@ class chromosome : public vector<genomic_element> {
   int draw_n_mut() { return gsl_ran_poisson(rng, M); }
 
   bool is_custom_genomic_element_type(int pop_id, int ge) {
-    return genomic_element_types.find(make_pair(pop_id, ge)) ==
-           genomic_element_types.end();
+    bool result = genomic_element_types.find(make_pair(pop_id, ge)) !=
+                  genomic_element_types.end();
+    return result;
   }
 
   mutation draw_new_mut(int pop_id, int g) {
@@ -1772,9 +1773,9 @@ class population : public map<int, subpopulation*> {
           }
 
           if (present == 0) {
-
-            if (i == j || (chr.is_custom_genomic_element_type(i, (*p).x) &&
-                           chr.is_custom_genomic_element_type(j, (*p).x))) {
+            if (i == j ||
+                (chr.is_custom_genomic_element_type(i, (*p).x + 1) == false &&
+                 chr.is_custom_genomic_element_type(j, (*p).x + 1) == false)) {
 
               // When not migration or both regions are defined with default
               // values, no refactor
