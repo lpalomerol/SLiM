@@ -1,31 +1,51 @@
-
 # SLiM
 
-TODO: Write a project description
+**S**election on **Li**nked **M**utations: a forward population genetic simulation for studying linkage effects, such as hitchhiking, background selection, and Hill-Robertson interference.
 
-## Installation
+SLiM can incorporate complex scenarios of demography and population substructure, various models for selection and dominance of new mutations, realistic gene and chromosome structure, and user-defined recombination maps. Emphasis was further placed on the ability to model and track individual selective sweeps – both complete and partial. While retaining all capabilities of a forward simulation, SLiM utilizes sophisticated algorithms and optimized data structures that enable simulations on the scale of entire eukaryotic chromosomes in reasonably large populations. All these features are implemented in an easy-to-use C++ command line program.
 
-TODO: Describe the installation process
+SLiM is a product of the Messer Lab at Cornell University. It was developed by Philipp Messer, and this fork has been made by Luis Palomero
 
-## Usage
+GitHub home page for SLiM: [https://github.com/MesserLab/SLiM](https://github.com/MesserLab/SLiM)
 
-TODO: Write usage instructions
+Messer Lab home page for SLiM: [http://messerlab.org/software/](http://messerlab.org/software/)
 
-## Contributing
+## Building and Running SLiM
 
-1. Fork it!
-2. Create your feature branch: `git checkout -b my-new-feature`
-3. Commit your changes: `git commit -am 'Add some feature'`
-4. Push to the branch: `git push origin my-new-feature`
-5. Submit a pull request :D
+For Mac OS X users, an Xcode project is provided that can be used to build SLiM. For users on other platforms, or for those who prefer not to use Xcode, SLiM can be built in Terminal with the commands:
 
-## History
+```
+cd SLiM
+g++ -O3 ./core/*.cpp -lgsl -lgslcblas -std=c++11 -o slim
+```
 
-TODO: Write history
+Note that SLiM uses C++11 extensions, and thus that standard is specified at compilation in order to suppress warnings.
+
+If your GNU Standard Library headers are not in the default search paths for g++, you will need to supply them on the command line.  You can find out the right command-line arguments to use for this by executing:
+
+```
+gsl-config --cflags --libs
+```
+
+For example, I have installed gsl using MacPorts, so my compilation command looks like:
+
+```
+g++ -O3 ./core/*.cpp -I/opt/local/include -L/opt/local/lib -lgsl -lgslcblas -std=c++11 -o slim
+```
+
+Once SLiM is built, just run it at Terminal's command line. For example, to run the first example provided in SLiM's distribution, execute:
+
+```
+cd SLiM
+./slim ./examples/input_example_1.txt
+```
+
+If you have made a Release build of SLiM with Xcode, it should be at /usr/local/bin/slim; you can provide that path or ensure that it is part of your shell's default search path.
+
 
 ## Credits
 
-TODO: Write credits
+Forked by Luis Palomero under guidance of Sebastián Ramos from CRAG (http://www.cragenomica.es/)
 
 ## License
 
