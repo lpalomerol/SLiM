@@ -16,7 +16,7 @@ For Mac OS X users, an Xcode project is provided that can be used to build SLiM.
 
 ```
 cd SLiM
-g++ -O3 ./core/*.cpp -lgsl -lgslcblas -std=c++11 -o slim
+g++ -O3 -Iinclude/ slim.cpp src/*.cpp -lgsl -lgslcblas -o slim
 ```
 
 Note that SLiM uses C++11 extensions, and thus that standard is specified at compilation in order to suppress warnings.
