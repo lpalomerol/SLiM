@@ -42,6 +42,13 @@ cd SLiM
 
 If you have made a Release build of SLiM with Xcode, it should be at /usr/local/bin/slim; you can provide that path or ensure that it is part of your shell's default search path.
 
+### Changes of this version
+
+This version adds features related with domestication processes. These functionalities are:
+ - Use sexed populations also with hermaphrodite ones.
+ - Manage different fitnesses by population, simulating different environments.
+ - Choose a fixed number of reproductive males from all the population males.
+ - Choose a ratio of females which will be reproduced at every generation. 
 
 ## Credits
 
