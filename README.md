@@ -45,10 +45,34 @@ If you have made a Release build of SLiM with Xcode, it should be at /usr/local/
 ### Changes of this version
 
 This version adds features related with domestication processes. These functionalities are:
+ - Manage different fitnesses by population, simulating different environments. 
  - Use sexed populations also with hermaphrodite ones.
- - Manage different fitnesses by population, simulating different environments.
  - Choose a fixed number of reproductive males from all the population males.
  - Choose a ratio of females which will be reproduced at every generation. 
+
+#### Different fitness by population
+
+Original SLiM version assumes that the different populations are at similar environments. This version has been thought for taking account different groups of environments (natural, domestic, etc) is necessary simulate different fitness per environment. Functionally has been made necessary update the `#GENOMIC ELEMENT TYPES` parameter including the population id as optional parameter.
+
+```
+#GENOMIC ELEMENT TYPES
+p1 g1 m1 0.70 m2 0.25 m3 0.05 / exon (70% deleterious, 25% neutral, 5% positive) for population1
+p2 g1 m2 0.50 m4 0.50 / exon (50% neutral, 50% deleterious fixed) for population 2
+g1 m1 0.15 m2 0.85 / exon (15% neutral,85% deleterious fixed). Default value for population 3
+g2 m1 0.50 m2 0.50 / UTR (50% deleterious, 50% neutral) for all p opulations
+g3 m2 1.0 / intron (100% neutral) for all populations
+```
+
+#### Include sexed populations 
+
+SLiM simulates hermaphrodite populations and the new requirement requires simulate sexed populations. Functionally a new parameter `#HERMAPRHDOTIES` has been added to the list of parameters. This optional parameter has only 2 possible values: 0 and 1, for sexed populations and hermaphrodites respectively. By default, the populations are hermaphrodite.
+
+```
+#HERMAPHRODITES 
+0
+```
+
+When the simulated individuals are sexed, the system generates the number of males and females randomly following a binomial distribution with p=0.5 allowing different number of males and females every generation.
 
 ## Credits
 
