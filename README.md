@@ -74,6 +74,35 @@ SLiM simulates hermaphrodite populations and the new requirement requires simula
 
 When the simulated individuals are sexed, the system generates the number of males and females randomly following a binomial distribution with p=0.5 allowing different number of males and females every generation.
 
+
+#### New Demography Event: Include reproductive threshold
+
+One of the most basic techics used at artificial selection is limit the number of males that are going to be reproduced at every generation. This number is fixed and this subset of males is selected randomly in bases of fitness following the same distribution than the used when the next generation individuals are generated. This subset of individuals does not repeat any individuals.
+
+At below sample the two populations are defined and p2 only allows to reproduce only 100 of the males.
+
+```
+#DEMOGRAPHY AND STRUCTURE
+1 P p1 500 / one population of 500 individuals
+1 P p2 500
+1 T p2 100 / Threshold: 100 of the individuals will cross with all others
+```
+
+#### New Demography Event: Include sex ratio of females
+
+Continuing with ancient techniques related with artificial selection, this fork includes the sex ratio, which implies select a variable number of females related with the males. For example, with a population of 1000 individuals (400 males and 600 females) if the ratio is 2 females per male and the threshold is 200 males, the number of reproductive females will be 400. From this selection of 600 individuals (200 males and 400 females) the next generation of 1000 individuals will be generated.
+
+```
+#DEMOGRAPHY AND STRUCTURE
+1 P p1 1000 / one population of 1000 individuals
+1 R p1 200 / Threshold: 200 of the males will cross with all others
+1 R p1 0.5 / Sex ratio: Two famales per female
+```
+
+Using the same idea than thresholds, a subset of reproductive females will be defined before generating the new population.
+
+
+
 ## Credits
 
 Forked by Luis Palomero under guidance of Sebastián Ramos from CRAG (http://www.cragenomica.es/)
