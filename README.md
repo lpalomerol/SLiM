@@ -62,6 +62,10 @@ g1 m1 0.15 m2 0.85 / exon (15% neutral,85% deleterious fixed). Default value for
 g2 m1 0.50 m2 0.50 / UTR (50% deleterious, 50% neutral) for all p opulations
 g3 m2 1.0 / intron (100% neutral) for all populations
 ```
+One of the most important functional changes related with this new requirement is related with the migration individuals throught populations. When one indiviual migrates from one population to another with different genomic element types definition, all their mutations are regenerated with the aim to simulate the different enviroments: One mutation which can be adaptative at wild world could be deletereous at farm.
+
+In example, consider one individual of population p1 with one mutation m1 which migrates to population p2. In this case, this mutation m1 is replaced by one mutation which can be m2 or m4 with a 50% of probability.
+
 
 #### Include sexed populations 
 
